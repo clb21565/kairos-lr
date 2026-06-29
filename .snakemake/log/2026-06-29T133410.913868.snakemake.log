@@ -1,0 +1,2 @@
+FileNotFoundError in file "/home/bio.aau.dk/se70ol/projects/kairos-lr/kairos-lr/Snakefile", line 114:
+[Errno 2] No such file or directory: '/home/bio.aau.dk/se70ol/projects/kairos-lr/kairos-lr/workflow/rules/orf_calling.smk'

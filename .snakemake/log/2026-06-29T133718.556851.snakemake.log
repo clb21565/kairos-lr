@@ -1,0 +1,67 @@
+Assuming unrestricted shared filesystem usage.
+host: bio-node11
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 32
+Rules claiming more threads will be scaled down.
+Job stats:
+job                     count
+--------------------  -------
+index_fasta                 1
+split_fasta                 1
+merge_results               1
+cluster_proteins            1
+generate_coords             1
+run_derep_detect            1
+get_merged_bed              1
+run_regions                 1
+taxonomic_annotation        1
+get_hgt                     1
+total                      10
+
+Select jobs to execute...
+Execute 2 jobs...
+[Mon Jun 29 13:37:19 2026]
+localrule index_fasta:
+    input: damhusaen_as_rp3_assembly.fasta
+    output: result/damhusaen_as_rp3_assembly.fasta.fai
+    jobid: 8
+    reason: Updated input files: damhusaen_as_rp3_assembly.fasta
+    resources: tmpdir=/tmp
+[Mon Jun 29 13:37:19 2026]
+localcheckpoint split_fasta:
+    input: damhusaen_as_rp3_assembly.fasta
+    output: result/split_damhusaen_as_rp3_assembly
+    jobid: 6
+    reason: Missing output files: result/split_damhusaen_as_rp3_assembly; Updated input files: damhusaen_as_rp3_assembly.fasta
+    wildcards: sample=damhusaen_as_rp3_assembly
+    resources: tmpdir=/tmp
+DAG of jobs will be updated after completion.
+Terminating processes on user request, this might take some time.
+RuleException:
+CalledProcessError in file "/home/bio.aau.dk/se70ol/projects/kairos-lr/kairos-lr/workflow/rules/orf_calling.smk", line 20:
+Command 'set -euo pipefail;  seqkit split2 -p 4 -O result/split_damhusaen_as_rp3_assembly damhusaen_as_rp3_assembly.fasta' died with <Signals.SIGINT: 2>.
+[Mon Jun 29 13:37:40 2026]
+Error in rule split_fasta:
+    message: None
+    jobid: 6
+    input: damhusaen_as_rp3_assembly.fasta
+    output: result/split_damhusaen_as_rp3_assembly
+    shell:
+        seqkit split2 -p 4 -O result/split_damhusaen_as_rp3_assembly damhusaen_as_rp3_assembly.fasta
+        (command exited with non-zero exit code)
+RuleException:
+CalledProcessError in file "/home/bio.aau.dk/se70ol/projects/kairos-lr/kairos-lr/workflow/rules/orf_calling.smk", line 30:
+Command 'set -euo pipefail;  samtools faidx damhusaen_as_rp3_assembly.fasta -o result/damhusaen_as_rp3_assembly.fasta.fai' died with <Signals.SIGINT: 2>.
+[Mon Jun 29 13:37:40 2026]
+Error in rule index_fasta:
+    message: None
+    jobid: 8
+    input: damhusaen_as_rp3_assembly.fasta
+    output: result/damhusaen_as_rp3_assembly.fasta.fai
+    shell:
+        samtools faidx damhusaen_as_rp3_assembly.fasta -o result/damhusaen_as_rp3_assembly.fasta.fai
+        (command exited with non-zero exit code)
+Complete log(s): /home/bio.aau.dk/se70ol/projects/kairos-lr/kairos-lr/.snakemake/log/2026-06-29T133718.556851.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.

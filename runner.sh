@@ -1,0 +1,9 @@
+#!/bin/bash
+#SBATCH --job-name=kairos_lr
+#SBATCH --output=logs/job_%j_%x.out
+#SBATCH --partition=shared
+#SBATCH --cpus-per-task 64
+#SBATCH --mem=350G
+#SBATCH --time=120:00:00
+#
+snakemake --cores 64 --config fasta="coded.fasta" threads=64

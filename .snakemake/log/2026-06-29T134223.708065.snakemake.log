@@ -1,0 +1,24 @@
+Assuming unrestricted shared filesystem usage.
+host: bio-node12
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 64
+Rules claiming more threads will be scaled down.
+Job stats:
+job                     count
+--------------------  -------
+index_fasta                 1
+split_fasta                 1
+merge_results               1
+cluster_proteins            1
+diamond_card                1
+diamond_ripdb               1
+generate_coords             1
+run_derep_detect            1
+get_merged_bed              1
+run_regions                 1
+taxonomic_annotation        1
+get_hgt                     1
+all                         1
+total                      13
+
