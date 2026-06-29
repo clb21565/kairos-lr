@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# kairos-lr config.yaml.example
+#
+# Copy this file to config.yaml and fill in the paths under "Reference
+# databases" — those have no portable default and the workflow will refuse
+# to start without them. Everything else has a sensible default baked into
+# the Snakefile and only needs to be set here if you want to override it.
+#
+# Usage:
+#   cp config.yaml.example config.yaml
+#   # edit config.yaml
+#   snakemake --configfile config.yaml -j 4
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Input ────────────────────────────────────────────────────────────────────
+# Path to the assembly FASTA to run the pipeline on. The sample name is
+# derived automatically from the filename (strips the .fasta extension).
+fasta: input.fasta
+
+
+# ── Reference databases (REQUIRED — no default) ─────────────────────────────
+# Absolute paths to pre-built sequence databases. The workflow checks these
+# exist at startup and exits immediately with a clear error if any are
+# missing or unset.
+
+# RIP (replication initiation protein) database, used for plasmid typing.
+#ripdb: /path/to/ripdb.faa
+ripdb: /home/bio.aau.dk/se70ol/databases/nine_reps/ripdb.faa
+
+# mobileOG-db, used for mobile genetic element ontology annotation.
+mobileog: /home/bio.aau.dk/se70ol/databases/mobtyper-typer-proteins.faa
+
+# MOBtyper-typer proteins, used for plasmid mobility typing.
+mobtyper: /home/bio.aau.dk/se70ol/databases/mobtyper-typer-proteins.faa
+
+# CARD (Comprehensive Antibiotic Resistance Database) protein FASTA.
+card: /home/bio.aau.dk/se70ol/databases/card/protein_fasta_protein_homolog_model.fasta
+
+# mmseqs-formatted GTDB database, used for taxonomic assignment of contigs
+# and candidate HGT regions. Build with `mmseqs databases GTDB <out> <tmp>`
+# or download a pre-built release from the GTDB-Tk resources page.
+gtdb_db: /home/bio.aau.dk/se70ol/projects/hgt/db/gtdb/gtdb
+
+
+# ── Scripts ──────────────────────────────────────────────────────────────────
+# By default these resolve relative to the Snakefile itself
+# (workflow.basedir/scripts/), so a fresh `git clone` works with no changes
+# here. Only set scripts_dir (or individual script paths) if you're running
+# a development copy that lives elsewhere, or want to mix versions.
+
+# scripts_dir: /path/to/dev-scripts/
+kairos_dd:   kairos-dd-v2.py
+regions:     regions2.py
+get_HGT:     get_hgt-v2.py
+
+
+# ── General parameters ───────────────────────────────────────────────────────
+threads: 4
+
+
+# ── ORF clustering (mmseqs easy-cluster) ────────────────────────────────────
+min_seq_id: 0.99   # minimum sequence identity for clustering
+min_cov: 0.8        # minimum query coverage for clustering
+minlen: 1000         # minimum ORF/region length considered
+
+
+# ── HGT region detection ─────────────────────────────────────────────────────
+# slop: extra basepairs added either side of a putative HGT region, to give
+#       downstream analyses (annotation, donor-recipient inference) more
+#       genomic context.
+slop: 1000
+
+# padding: distance (bp) within which nearby candidate-HGT hits are merged,
+#          and used to classify a region as "edge" vs "internal" relative to
+#          its contig.
+padding: 1000
+
+
+# ── Functional annotation thresholds ────────────────────────────────────────
+# Each database has its own identity / query-cover / subject-cover cutoffs,
+# passed directly to `diamond blastp --id / --query-cover / --subject-cover`.
+
+# RIP database
+RIPid: 20
+RIPqc: 80
+RIPsc: 80
+
+# mobileOG-db
+MGEid: 20
+MGEqc: 80
+MGEsc: 80
+
+# CARD
+ARGid: 90
+ARGqc: 50
+ARGsc: 50
+
+
+# ── Workflow metadata ────────────────────────────────────────────────────────
+wf_version: "0.1.0"
+
