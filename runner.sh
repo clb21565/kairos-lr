@@ -6,4 +6,8 @@
 #SBATCH --mem=350G
 #SBATCH --time=120:00:00
 #
-snakemake --cores 64 --config fasta="coded.fasta" threads=64
+#
+#
+#
+snakemake --cores 64 --configfile test-config.yaml --config fasta="coded.fasta" threads=64
+#snakemake --cores 64 --config fasta="coded.fasta" threads=64

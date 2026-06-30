@@ -1,3 +1,8 @@
 result/
 *fasta
 .snakemake/
+*tmp*
+*logs*
+hgt_viz
+*fai
+*sh
