@@ -40,7 +40,7 @@ card: /home/bio.aau.dk/se70ol/databases/card/protein_fasta_protein_homolog_model
 # mmseqs-formatted GTDB database, used for taxonomic assignment of contigs
 # and candidate HGT regions. Build with `mmseqs databases GTDB <out> <tmp>`
 # or download a pre-built release from the GTDB-Tk resources page.
-gtdb_db: /home/bio.aau.dk/se70ol/projects/hgt/db/gtdb/gtdb
+gtdb_db: /projects/MA/HGT/gtdb_v232/gtdb
 
 
 # ── Scripts ──────────────────────────────────────────────────────────────────
