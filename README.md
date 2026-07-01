@@ -6,7 +6,7 @@ A Snakemake pipeline for detecting and classifying horizontal gene transfer (HGT
 
 ## Overview
 
-kairos-lr takes a long-read metagenomic assembly and identifies contigs that carry regions of likely horizontally-transferred DNA, based on taxonomic discordance between a region and its host contig, and/or overlapping regions shared between taxonomically distinct contigs. It reports per-event, per-group, and donor–recipient summaries, and ships with a companion interactive visualization tool for inspecting HGT groups as clinker-style linear gene maps connected by Bezier arcs.
+kairos-lr takes a long-read metagenomic assembly and identifies contigs that carry regions of likely horizontally-transferred DNA, based on taxonomic discordance between a region and its host contig, and/or overlapping regions shared between taxonomically distinct contigs. It reports per-event, per-group, and donor–recipient summaries. Do quick assessment of results using [companion](https://github.com/clb21565/hgt_viz.git) streamlit tool. 
 
 The pipeline covers:
 
@@ -27,7 +27,7 @@ For each pair/region, the pipeline records the most inclusive taxonomic rank at 
 ## Installation
 
 ```bash
-git clone https://github.com/<your-org>/kairos-lr.git
+git clone https://github.com/clb21565/kairos-lr.git
 cd kairos-lr
 conda env create -f environment.yml
 conda activate kairos-lr
@@ -38,10 +38,10 @@ conda activate kairos-lr
 Copy the example config and fill in the required reference database paths:
 
 ```bash
-cp config/config.yaml.example config/config.yaml
+vi config.yaml
 ```
 
-`config/config.yaml` requires (no defaults are provided — the pipeline validates these at startup):
+'config.yaml` requires (no defaults are provided — the pipeline validates these at startup): 
 
 | key | description |
 |---|---|
@@ -75,18 +75,14 @@ Results are written to `result/<sample>/`, including:
 
 ## Visualization
 
-A companion interactive tool renders HGT groups as stacked linear gene maps (one row per contig) connected by Bezier arcs between homologous gene pairs, in the style of [clinker](https://github.com/gamcil/clinker). Arc color encodes divergence rank (e.g. red for domain-level discordance down to yellow for genus-level), with a rank filter to isolate, for example, only cross-phylum HGT events.
-
-See `viz/README.md` for setup and usage (separate from the main Snakemake pipeline).
+[see HGT_viz repo for current draft streamlight app](https://github.com/clb21565/hgt_viz)
 
 ## Repository structure
 
 ```
 kairos-lr/
 ├── Snakefile                  # entry point; includes rules/, defines rule all
-├── config/
-│   ├── config.yaml.example
-│   └── samples.tsv
+├── config.yaml
 ├── workflow/
 │   ├── rules/
 │   │   ├── orf_calling.smk
@@ -97,7 +93,6 @@ kairos-lr/
 │   │   └── annotation.smk
 │   └── envs/
 ├── scripts/                   # Python/R logic called by rules
-├── viz/                       # interactive HGT group visualizer
 ├── test/
 │   ├── data/
 │   └── expected/
@@ -107,9 +102,6 @@ kairos-lr/
 └── environment.yml
 ```
 
-## Citing
-
-If you use kairos-lr in your research, please cite: *(citation pending publication)*
 
 ## License
 
