@@ -51,7 +51,7 @@ vi config.yaml
 | `card` | path to CARD database |
 | `gtdb_db` | path to GTDB reference |
 
-A sample sheet mapping sample names to assembly FASTAs goes in `config/samples.tsv`.
+
 
 ## Usage
 
@@ -60,7 +60,6 @@ snakemake --cores <N> --configfile config/config.yaml \
   --config fasta="<sample>_assembly.fasta" threads=<N>
 ```
 
-For cluster/HPC execution (SLURM), see `workflow/profiles/` (or your cluster's Snakemake profile) — each sample can be submitted as an independent job.
 
 ## Output
 
