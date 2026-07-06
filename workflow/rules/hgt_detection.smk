@@ -44,7 +44,6 @@ rule run_regions:
         out_prefix = "result/{sample}"
     output:
         region_overlaps="result/{sample}.kairos_region_overlaps.tsv",
-        groups="result/{sample}.group_metadata.tsv",
         filtered_overlaps="result/{sample}.kairos_filtered_overlaps.tsv",
         region_metadata="result/{sample}.kairos_region_metadata.tsv",
         fasta="result/{sample}.potential_hgt_regions.fasta",
@@ -58,11 +57,9 @@ rule run_regions:
         " --region-overlaps-output {output.region_overlaps}"
         " --filtered-overlaps-output {output.filtered_overlaps}"
         " --region-metadata-output {output.region_metadata}"
-        " --group-metadata-output {output.groups}"
         " --filter-reciprocals"
         " --input-fasta {input.fasta}"
         " --extract-regions"
         " --extracted-fasta {output.fasta}"
         " --bed-output {output.bed}"
         " --slop {SLOP}"
-

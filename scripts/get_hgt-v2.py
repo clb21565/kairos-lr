@@ -16,7 +16,6 @@ from collections import Counter
 import pandas as pd
 import networkx as nx
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -34,7 +33,6 @@ LEVEL_RANK = {
     "dHGT": "d", "pHGT": "p", "cHGT": "c",
     "oHGT": "o", "fHGT": "f", "gHGT": "g", "sHGT": "s",
 }
-
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -59,7 +57,6 @@ def parse_args():
                         help="Output directory. Defaults to --path.")
     return parser.parse_args()
 
-
 # ---------------------------------------------------------------------------
 # I/O helpers
 # ---------------------------------------------------------------------------
@@ -72,7 +69,6 @@ def read_taxonomy(filepath: str, id_col: str) -> pd.DataFrame:
     lineage_split.columns = LINEAGE_COLS[: lineage_split.shape[1]]
     df = pd.concat([df.drop(columns=["lineage"]), lineage_split], axis=1)
     return df
-
 
 # ---------------------------------------------------------------------------
 # HGT classification
@@ -109,7 +105,6 @@ def hgt_levels(df: pd.DataFrame, suffix_a: str, suffix_b: str) -> dict:
         results[label] = subset.copy()
     return results
 
-
 # ---------------------------------------------------------------------------
 # Union-Find
 # ---------------------------------------------------------------------------
@@ -135,10 +130,8 @@ def _union_find(pairs: list) -> dict:
         union(a, b)
     return {x: find(x) for x in parent}
 
-
 def make_hgt_groups(allHGT2: pd.DataFrame,
-                    region_metadata: pd.DataFrame,
-                    group_metadata: pd.DataFrame) -> pd.DataFrame:
+                    region_metadata: pd.DataFrame) -> pd.DataFrame:
     """
     Single global union-find over ALL HGT-implicated regions (any level),
     mirroring the set-union step in regions2.py.
@@ -147,14 +140,12 @@ def make_hgt_groups(allHGT2: pd.DataFrame,
     ------
     allHGT2        : union of all criteria-2 HGT overlap rows (any level)
     region_metadata: kairos_region_metadata.tsv
-    group_metadata : group_metadata.tsv from regions2.py (keyed via 'regions' column)
 
     Returns
     -------
     One row per region_idx that participates in any HGT, with:
       hgt_group_id, hgt_group_size, hgt_group_root
       + all region_metadata columns
-      + group_metadata columns (joined by exploding 'regions')
     """
     id1, id2 = "region_idx_contig1", "region_idx_contig2"
     pairs = (
@@ -192,25 +183,7 @@ def make_hgt_groups(allHGT2: pd.DataFrame,
         ]).drop_duplicates(subset="region_idx")
         groups_df = groups_df.merge(idx_map, on="region_idx", how="left")
 
-    # Join regions2.py group_metadata by exploding its 'regions' column
-    if not group_metadata.empty and "regions" in group_metadata.columns:
-        grp_exp = group_metadata.copy()
-        if grp_exp["regions"].dtype == object:
-            grp_exp["regions"] = grp_exp["regions"].astype(str).str.split(",")
-        grp_exp = grp_exp.explode("regions")
-        grp_exp["region_idx"] = pd.to_numeric(
-            grp_exp["regions"].astype(str).str.strip(), errors="coerce"
-        )
-        grp_exp = (
-            grp_exp.drop(columns=["regions"])
-            .dropna(subset=["region_idx"])
-            .assign(region_idx=lambda x: x["region_idx"].astype(int))
-        )
-        groups_df = groups_df.merge(grp_exp, on="region_idx", how="left",
-                                    suffixes=("", "_grp"))
-
     return groups_df.sort_values(["hgt_group_id", "region_idx"]).reset_index(drop=True)
-
 
 # ---------------------------------------------------------------------------
 # Donor-recipient annotation (Criteria 1)
@@ -274,7 +247,6 @@ def annotate_donor_recipient(hgt1_df: pd.DataFrame,
     ]
     return result.reset_index(drop=True)
 
-
 # ---------------------------------------------------------------------------
 # Group report  (compact — one row per group)
 # ---------------------------------------------------------------------------
@@ -292,9 +264,6 @@ def build_group_report(groups_df: pd.DataFrame) -> pd.DataFrame:
     num_distinct_domains, num_distinct_phyla, num_distinct_classes,
     num_distinct_orders,  num_distinct_families, num_distinct_genera,
     num_distinct_species,
-    kairos_group_id, kairos_group_name,
-    kairos_longest_region, kairos_longest_region_length
-
     Full per-region detail stays in hgt_groups.tsv.
     """
     if groups_df.empty:
@@ -334,16 +303,6 @@ def build_group_report(groups_df: pd.DataFrame) -> pd.DataFrame:
                 agg_spec[alias] = (col, _nunique)
                 break
 
-    # regions2.py group metadata
-    for col, alias in [
-        ("group_id",              "kairos_group_id"),
-        ("group_name",            "kairos_group_name"),
-        ("longest_region",        "kairos_longest_region"),
-        ("longest_region_length", "kairos_longest_region_length"),
-    ]:
-        if col in groups_df.columns:
-            agg_spec[alias] = (col, "first")
-
     valid_spec = {
         k: pd.NamedAgg(column=v[0], aggfunc=v[1])
         for k, v in agg_spec.items()
@@ -358,7 +317,6 @@ def build_group_report(groups_df: pd.DataFrame) -> pd.DataFrame:
         .sort_values("hgt_group_size", ascending=False)
         .reset_index(drop=True)
     )
-
 
 # ---------------------------------------------------------------------------
 # Graph stats
@@ -385,7 +343,6 @@ def compute_graph_stats(hgt_df: pd.DataFrame,
         "outdegree": [dict(g.out_degree())[n] for n in pr],
     })
 
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -404,27 +361,24 @@ def main():
     # 1. Load data
     # ------------------------------------------------------------------
 
-    print(f"[1/5] Reading region taxonomy")
+    print(f"[1/4] Reading region taxonomy")
     region_taxonomy = read_taxonomy(
         os.path.join(pth, f"{sp}.potential_hgt_regions.taxonomy.tsv"), id_col="region")
     region_taxonomy["region"] = region_taxonomy["region"].str.replace(
         r"::(.*?)$", "", regex=True)
 
-    print(f"[2/5] Reading contig taxonomy")
+    print(f"[2/4] Reading contig taxonomy")
     contig_taxonomy = read_taxonomy(
         os.path.join(pth, f"{sp}.assignRes2.tsv"), id_col="contig")
 
-    print(f"[3/5] Reading region metadata")
+    print(f"[3/4] Reading region metadata")
     region_metadata = pd.read_csv(
         os.path.join(pth, f"{sp}.kairos_region_metadata.tsv"), sep="\t")
 
-    print(f"[4/5] Reading overlaps")
+    print(f"[4/4] Reading overlaps")
     overlaps = pd.read_csv(
         os.path.join(pth, f"{sp}.kairos_region_overlaps.tsv"), sep="\t")
 
-    print(f"[5/5] Reading group metadata")
-    groups = pd.read_csv(
-        os.path.join(pth, f"{sp}.group_metadata.tsv"), sep="\t")
 
     # ------------------------------------------------------------------
     # 2. Criteria 1 — region taxonomy != contig taxonomy
@@ -509,7 +463,7 @@ def main():
     # ------------------------------------------------------------------
 
     print("\n[Union-Find grouping across all HGT levels]")
-    hgt_groups = make_hgt_groups(allHGT2, region_metadata, groups)
+    hgt_groups = make_hgt_groups(allHGT2, region_metadata)
     n_groups   = hgt_groups["hgt_group_id"].nunique() if not hgt_groups.empty else 0
     print(f"  {n_groups} groups from {len(allHGT2)} overlap pairs")
 
@@ -580,7 +534,6 @@ def main():
         print(f"Saved {stem} ({len(df)} rows) → {out}")
 
     print("\nDone.")
-
 
 if __name__ == "__main__":
     main()

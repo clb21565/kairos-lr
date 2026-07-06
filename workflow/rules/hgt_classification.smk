@@ -18,7 +18,6 @@ rule get_hgt:
     input:
         region_overlaps  = "result/{sample}.kairos_region_overlaps.tsv",
         region_metadata  = "result/{sample}.kairos_region_metadata.tsv",
-        groups           = "result/{sample}.group_metadata.tsv",
         contig_taxonomy  = "result/{sample}.assignRes2.tsv",
         region_taxonomy  = "result/{sample}.potential_hgt_regions.taxonomy.tsv"
     output:
@@ -27,4 +26,3 @@ rule get_hgt:
         path = "result/"
     shell:
         "python {get_HGT} --path {params.path} --sample {wildcards.sample} --out-dir {output.outdir}"
-

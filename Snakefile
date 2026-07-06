@@ -100,7 +100,7 @@ onsuccess:
 # ── Final targets ────────────────────────────────────────────────────────────
 rule all:
     input:
-        expand("result/{sample}.group_metadata.tsv", sample=SAMPLE),
+        #expand("result/{sample}.group_metadata.tsv", sample=SAMPLE),
         expand("result/{sample}-ripdb.tsv", sample=SAMPLE),
         expand("result/{sample}-card.tsv", sample=SAMPLE),
         expand("result/{sample}.assignRes2.tsv", sample=SAMPLE),

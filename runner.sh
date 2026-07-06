@@ -3,22 +3,21 @@
 #SBATCH --output=logs/job_%j_%x.out
 #SBATCH --partition=shared
 #SBATCH --cpus-per-task 64
-#SBATCH --mem=350G
+#SBATCH --mem=650G
 #SBATCH --time=120:00:00
 #
 #
 #
-
-#mkdir result/AAAS11	
-#cp /projects/MA/HGT/wastewater_myloasm/AAAS11/results/AAAS11_assembly.fasta .
-#snakemake --cores 64 --configfile test-config.yaml --config fasta="AAAS11_assembly.fasta" threads=64 
+mkdir result/AAAS11	
+cp /projects/MA/HGT/wastewater_myloasm/AAAS11/results/AAAS11_assembly.fasta .
+snakemake --cores 64 --configfile test-config.yaml --config fasta="AAAS11_assembly.fasta" threads=64 
 #mv result/AAAS11* result/AAAS11*
-#mkdir result/AAI9	
+mkdir result/AAI9	
 #rm AAAS11_assembly.fasta
 
-#cp /projects/MA/HGT/wastewater_myloasm/AAI9/results/AAI9_assembly.fasta .
-#snakemake --cores 64 --configfile test-config.yaml --config fasta="AAI9_assembly.fasta" threads=64
-#mv result/AAI9* result/AAI9*
+cp /projects/MA/HGT/wastewater_myloasm/AAI9/results/AAI9_assembly.fasta .
+snakemake --cores 64 --configfile test-config.yaml --config fasta="AAI9_assembly.fasta" threads=64
+mv result/AAI9* result/AAI9*
 
 #mkdir AVAS3	
 #cp /projects/MA/HGT/wastewater_myloasm/AVAS3/results/AVAS3_assembly.fasta .
