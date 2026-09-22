@@ -5,8 +5,9 @@ HGT (Horizontal Gene Transfer) Analysis Script
 Criteria 1: Region has different taxonomy than its host contig.
 Criteria 2: Internal regions shared between contigs with discordant taxonomy.
 
-Union-Find grouping runs once across ALL HGT-implicated regions (any level),
-mirroring the set-union step in regions2.py.
+Union-Find grouping runs once across regions associated with HGT. Note that right now this step leads to very large clusters in some cases, need to explore how to stop the exploding connections. 
+
+Can adjust mmseqs2 taxonomy settings minimum number of fragments, number of returned fragments, min agreed, and in general the minimum region length to consider for HGT prediction. 
 """
 
 import argparse
@@ -73,7 +74,7 @@ def read_taxonomy(filepath: str, id_col: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # HGT classification
 # ---------------------------------------------------------------------------
-
+# connor notes: this function will silently fail if taxonomy strings are not consistent, as it expects for each increasing level of taxonomy that the previous ones are identical, but only up to 1 level below. so, if they have same genus names but belong to different families, it give an incorrect result at the genus species level. 
 def hgt_levels(df: pd.DataFrame, suffix_a: str, suffix_b: str) -> dict:
     """
     Hierarchical HGT classification at each taxonomic rank.
@@ -87,7 +88,7 @@ def hgt_levels(df: pd.DataFrame, suffix_a: str, suffix_b: str) -> dict:
         a_col = f"{rank}_{suffix_a}"
         b_col = f"{rank}_{suffix_b}"
         if a_col not in df.columns or b_col not in df.columns:
-            results[label] = pd.DataFrame()
+            results[label] = pd.DataFrame() #stores an empty dataframe if either column is not in the df. this is a sanity check for a problem that doesn't exist. 
             continue
         valid = df[
             df[a_col].notna() & df[b_col].notna() &
@@ -133,8 +134,7 @@ def _union_find(pairs: list) -> dict:
 def make_hgt_groups(allHGT2: pd.DataFrame,
                     region_metadata: pd.DataFrame) -> pd.DataFrame:
     """
-    Single global union-find over ALL HGT-implicated regions (any level),
-    mirroring the set-union step in regions2.py.
+    Single global union-find over ALL HGT-implicated regions (any level).
 
     Inputs
     ------
@@ -319,7 +319,7 @@ def build_group_report(groups_df: pd.DataFrame) -> pd.DataFrame:
     )
 
 # ---------------------------------------------------------------------------
-# Graph stats
+# Graph stats - experimental right now 
 # ---------------------------------------------------------------------------
 
 def compute_graph_stats(hgt_df: pd.DataFrame,
