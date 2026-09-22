@@ -8,6 +8,8 @@ Criteria 2: Internal regions shared between contigs with discordant taxonomy.
 Union-Find grouping runs once across regions associated with HGT. Note that right now this step leads to very large clusters in some cases, need to explore how to stop the exploding connections. 
 
 Can adjust mmseqs2 taxonomy settings minimum number of fragments, number of returned fragments, min agreed, and in general the minimum region length to consider for HGT prediction. 
+
+The criteria 2 HGT set can have only one orf shared between two contigs and still be declared overlapping regions and thus HGT. Consider modifying this to control for a minimum number of orfs. 
 """
 
 import argparse
