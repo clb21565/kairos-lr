@@ -10,3 +10,4 @@ dependencies:
   - snakemake>=9.9
   - snakemake-executor-plugin-slurm
   - pandas
+  - wgsim            # only for the simulated test data (.tests/make_sim_data.py)

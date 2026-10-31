@@ -63,8 +63,10 @@ Planned additions as stages land:
 
 ```bash
 conda env create -f environment.yml && conda activate kairos-lr
-python .tests/run_sim.py --use-conda                         # local executor, per-rule envs
-python .tests/run_sim.py --use-conda --profile profiles/slurm --keep   # once envs exist: via SLURM
+# 1. local executor (e.g. in an interactive job), per-rule conda envs
+python .tests/run_sim.py --use-conda
+# 2. the same through SLURM, in a separate output directory
+python .tests/run_sim.py --use-conda --profile profiles/slurm --outdir .tests/sim_slurm
 ```
 
 This checks that every `workflow/envs/*.yaml` solves and that the tool versions behave like
