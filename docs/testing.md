@@ -122,7 +122,24 @@ short-only, long-only and both read types:
 
 The influent/effluent year:
 
-1. Run the whole workflow.
-2. Compare the in situ events with the regenerated R results (`insitu_hgt_weekly.R`, with
-   the fixes). They can't match exactly, because the old method used salmon on edge windows.
-3. Report the overlap, then explain the differences by tier and detection state.
+1. Start small: one site and about 10 consecutive weeks, influent and effluent. Use the
+   CIWARS setup (`call.observed_fractions: [INF]`, `call.prior_fractions: [INF, EFF]`) and
+   set `timepoint` in the sample sheet to the R `ordered_week`.
+2. Regenerate the R results for the same weeks with the fixed `get_isHGTs_weekly`
+   (`insitu_hgt_weekly.R`).
+3. Compare:
+
+   ```bash
+   python tools/compare_insitu_r.py --r 240903-phgt-res.csv --rank p \
+       --insitu results/call/insitu_events.tsv --call-dir results/call --out cmp_p.tsv
+   ```
+
+   This reports:
+   - the edges found by both methods;
+   - the new-only events, by tier;
+   - the R-only edges, each with a reason (`no_event`, `recipient_not_new`,
+     `recipient_not_seen`, `donor_not_before`, `other_timepoint`).
+
+   They can't match exactly, because the old method used salmon on edge windows and
+   contig-level presence. Use `--contig-map` if the catalogue renamed contigs.
+4. If the reasons make sense, run the whole year.
