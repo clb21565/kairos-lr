@@ -1,6 +1,7 @@
 """
-Local integration test: simulate a small study, run detect (up to the features) and assess,
-and check the counts against what was simulated (see make_sim_data.py).
+Local integration test: simulate a small study, run detect (up to the features), assess and
+call (without taxonomy), and check the counts, states and in situ events against what was
+simulated (see make_sim_data.py).
 
 Needs snakemake, mappy, pysam, pandas, prodigal, mmseqs2, strobealign, minimap2, samtools,
 wgsim and seqkit on PATH (no --use-conda; on the HPC use run_sim.py --use-conda instead).
@@ -23,11 +24,14 @@ REPO = os.path.dirname(HERE)
 def run(outdir, use_conda, extra):
     subprocess.run([sys.executable, os.path.join(HERE, "make_sim_data.py"), outdir], check=True)
     open(os.path.join(outdir, "gtdb"), "w").close()     # detect taxonomy is not run here
-    cmd = ["snakemake", "assess", "-s", os.path.join(REPO, "Snakefile"), "-d", outdir,
+    with open(os.path.join(outdir, "sim_config.yaml"), "w") as f:
+        f.write("call:\n  use_taxonomy: false\n")
+    cmd = ["snakemake", "assess", "call", "-s", os.path.join(REPO, "Snakefile"), "-d", outdir,
            "--configfile", os.path.join(REPO, "config", "config.yaml"),
+           os.path.join(outdir, "sim_config.yaml"),
            "--config", "catalogue=catalogue.fa", "samples=samples.tsv", "gtdb_db=gtdb",
            "ripdb=", "card=", "threads=2", "cluster_method=easy-linclust",
-           "-c", "2", "--quiet", "progress", *extra]
+           "-c", "2", "--quiet", "all", *extra]
     if use_conda:
         cmd.append("--use-conda")
     subprocess.run(cmd, check=True)
@@ -72,6 +76,31 @@ def check(outdir):
         expect(J[s, "asm2_host2"] >= 5, f"{s}: host2 junction reads ({J[s, 'asm2_host2']})")
         expect(E[s, "asm2_host2"] == 0, f"{s}: no host2 empty site ({E[s, 'asm2_host2']})")
         expect(J[s, "asm3_host3"] == 0 and F[s, "asm3_host3"] == 0, f"{s}: host3 absent")
+
+    # stage 3: states per observation (timepoint) and the in situ event
+    call = os.path.join(res, "call")
+    segs = pd.read_csv(os.path.join(call, "segments.tsv"), sep="\t")
+    st = pd.read_csv(os.path.join(call, "states.tsv"), sep="\t").merge(
+        segs[["segment_id", "contig"]], on="segment_id")
+    S = st.set_index(["timepoint", "contig"])["state"]
+    expect(S[1, "asm1_host1"] == "absent", f"t1: host1 segment absent ({S[1, 'asm1_host1']})")
+    expect(S[2, "asm1_host1"] == "present", f"t2: host1 segment present ({S[2, 'asm1_host1']})")
+    expect(all(S[t, "asm2_host2"] == "present" for t in (1, 2, 3)), "host2 segment present at t1-t3")
+    expect(all(S[t, "asm3_host3"] == "undetermined" for t in (1, 2, 3)), "host3 (not sequenced) undetermined")
+    cf = st.set_index(["timepoint", "contig"])["carrier_frac_depth"][2, "asm1_host1"]
+    expect(0.3 <= cf <= 0.75, f"t2: host1 carrier fraction ~0.5 ({cf})")
+
+    ev = pd.read_csv(os.path.join(call, "insitu_events.tsv"), sep="\t")
+    expect(len(ev) == 1, f"one in situ event ({len(ev)})")
+    if len(ev) == 1:
+        e = ev.iloc[0]
+        expect(e["recipient_contig"] == "asm1_host1" and e["timepoint"] == 2,
+               f"host1 is the recipient at t2 ({e['recipient_contig']}, t{e['timepoint']})")
+        expect(e["direction"] == "directed" and e["tier"] == "A",
+               f"directed, tier A ({e['direction']}, {e['tier']})")
+        expect(e["donor_contig"] in ("asm2_host2",) and e["donor_last_timepoint"] == 1,
+               f"donor host2 last seen at t1 ({e['donor_contig']}, t{e['donor_last_timepoint']})")
+        expect(e["persistence"] == "yes", f"still present at t3 ({e['persistence']})")
     return failures
 
 

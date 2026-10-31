@@ -72,6 +72,9 @@ FEATURES = config["features"]
 # ── Assess parameters (read mapping, count_features.py) ─────────────────────
 ASSESS = config["assess"]
 
+# ── Call parameters (detect_state.py, insitu.py) ────────────────────────────
+CALL = config["call"]
+
 # ── Script paths ────────────────────────────────────────────────────────────
 SCRIPTS_DIR = config.get("scripts_dir") or os.path.join(workflow.basedir, "scripts")
 
@@ -80,6 +83,8 @@ regions   = os.path.join(SCRIPTS_DIR, "regions-v2.py")
 get_HGT   = os.path.join(SCRIPTS_DIR, "get_hgt-v2.py")
 build_features = os.path.join(SCRIPTS_DIR, "build_features.py")
 count_features = os.path.join(SCRIPTS_DIR, "count_features.py")
+detect_state   = os.path.join(SCRIPTS_DIR, "detect_state.py")
+insitu         = os.path.join(SCRIPTS_DIR, "insitu.py")
 
 
 # ── Startup checks ───────────────────────────────────────────────────────────
@@ -120,10 +125,20 @@ def assess_targets():
         "results/assess/{sample}/{sample}.coverage.tsv",
     ], sample=SAMPLES.index)
 
+def call_targets():
+    if SAMPLES is None:
+        return []
+    targets = ["results/call/states.tsv"]
+    # in situ calls need every sample placed in time
+    if "timepoint" in SAMPLES and (SAMPLES["timepoint"] != "").all():
+        targets.append("results/call/insitu_events.tsv")
+    return targets
+
 rule all:
     input:
         detect_targets(),
-        assess_targets()
+        assess_targets(),
+        call_targets()
 
 rule detect:
     input:
@@ -133,6 +148,10 @@ rule detect:
 rule assess:
     input:
         assess_targets()
+
+rule call:
+    input:
+        call_targets()
 
 
 # ── Rule modules ─────────────────────────────────────────────────────────────
@@ -144,3 +163,4 @@ include: "workflow/rules/hgt_classification.smk"
 include: "workflow/rules/annotation.smk"
 include: "workflow/rules/features.smk"
 include: "workflow/rules/assess.smk"
+include: "workflow/rules/call.smk"

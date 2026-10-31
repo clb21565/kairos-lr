@@ -47,6 +47,16 @@ properties:
       max_insert:        {type: integer, minimum: 1}
       empty_tolerance:   {type: integer, minimum: 0}
     required: [short_aligner, short_read_length, long_read_presets, min_mapq, junction_min_mapq, overhang, max_insert, empty_tolerance]
+  call:
+    type: object
+    properties:
+      min_reads:          {type: integer, minimum: 1}
+      alpha:              {type: number, exclusiveMinimum: 0, maximum: 1}
+      absent_fraction:    {type: number, exclusiveMinimum: 0, maximum: 1}
+      observed_fractions: {type: array, items: {type: string}}
+      prior_fractions:    {type: array, items: {type: string}}
+      use_taxonomy:       {type: boolean}
+    required: [min_reads, alpha, absent_fraction, observed_fractions, prior_fractions, use_taxonomy]
   annotation:
     type: object
     additionalProperties:
@@ -57,4 +67,4 @@ properties:
         sc: {type: number}
       required: [id, qc, sc]
   wf_version:      {type: string}
-required: [catalogue, gtdb_db, features, assess, annotation]
+required: [catalogue, gtdb_db, features, assess, call, annotation]

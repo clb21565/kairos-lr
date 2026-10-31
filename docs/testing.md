@@ -18,10 +18,18 @@ HPC only once those pass. Each tier answers a different question.
 python -m pytest tests/
 ```
 
-`tests/test_build_features.py` checks how breakpoints are refined: a reverse-strand partner,
-a segment that runs to the contig end, breakpoints merged across partners, empty-site
-sequences, and flanks that overlap another region. Add a test file per script as scripts
-are added (`detect_state.py`, `insitu.py`).
+- `tests/test_build_features.py` checks how breakpoints are refined: a reverse-strand partner,
+  a segment that runs to the contig end, breakpoints merged across partners, empty-site
+  sequences, and flanks that overlap another region.
+- `tests/test_call.py` checks the detection limit (Poisson threshold) and the in situ rules:
+  - tier A vs B;
+  - unresolved direction;
+  - donor first seen later;
+  - recipient already seen;
+  - same-day import between fractions;
+  - observed and prior fractions (the CIWARS setup);
+  - date ordering;
+  - discordant rank.
 
 ## Tier 1: simulated study (local)
 
@@ -39,8 +47,13 @@ cassette, so the empty site is present in the community. Five samples are made:
 - t3: host1 is at only 3×.
 
 Both short (wgsim) and long (1% error) reads are simulated. The script runs detect up to the
-features, then assess (taxonomy is skipped: it needs GTDB). It then checks the counts against
-the simulation: junction reads, empty-site reads and pairs, flank depth, and absent hosts.
+features, then assess and call (taxonomy is skipped: it needs GTDB). It then checks the
+results against the simulation:
+
+- counts: junction reads, empty-site reads and pairs, flank depth, and absent hosts;
+- states: host1 absent at t1 and present at t2, with a carrier fraction of about 0.5;
+- the in situ event: host1 is the recipient at t2, host2 the donor last seen at t1; it is
+  tier A and persists.
 
 The tools must be on PATH, without conda. On this VM they are in a micromamba env:
 
@@ -51,10 +64,7 @@ export MAMBA_ROOT_PREFIX=~/.local/micromamba/root
 
 `cluster_method=easy-linclust` is used because nucleotide `easy-cluster` needs more than 3 GB.
 
-Planned additions as stages land:
-- **Stage 3:** check present/absent/undetermined per sample against the truth, and the
-  expected in situ call: host1 gains the cassette at t2 (tier A, because t1 had empty-site
-  evidence), and the t3 call is undetermined.
+Planned additions:
 - **Second pass:** check empty-site split reads for strobealign.
 - **Edge cases:** a donor first seen at the same time point (unresolved direction), and a
   segment at a contig end (one breakpoint only).
