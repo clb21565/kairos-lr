@@ -101,7 +101,6 @@ def call_states(seg, bp, es, args):
     bp["n"] = bp["span"] + bp["bridge"]
     per_bp = bp.groupby(OBS + ["bp_id"], as_index=False).agg(
         n=("n", "sum"), n_span=("span", "sum"), lam=("lam", "sum"), flank_depth=("flank_depth", "sum"))
-    es["empty"] = es["empty_split"] + es["empty_pairs"]
     per_es = es.groupby(OBS + ["es_id"], as_index=False)["empty"].sum()
 
     # segment -> its breakpoints (long form)

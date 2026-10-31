@@ -17,6 +17,12 @@ and for each empty site (contig with its shared segment removed):
                (long reads; short reads from aligners that report SA, e.g. bwa-mem2)
   empty_pairs  read pairs with one mate in each flank and an insert that is the segment
                length longer than normal (paired-end only)
+  empty_remap  second pass (short reads, --junctions): reads near the segment ends that are
+               soft-clipped by at least --overhang bp, or unmapped with the mate nearby, are
+               realigned (mappy, sr preset) to the junction windows and empty-site sequences
+               together; those aligned across the empty-site junction count here. This gives
+               split-read evidence for aligners that only soft-clip (strobealign).
+  empty        templates with any of the above, each counted once
 
 Junction evidence (span, bridge, empty_*) uses --junction-min-mapq; flank depth uses --min-mapq.
 Junction reads lie partly in shared sequence, so aligners give them modest MAPQ (strobealign:
@@ -30,6 +36,7 @@ import argparse
 import re
 import sys
 
+import mappy
 import pandas as pd
 import pysam
 
@@ -59,6 +66,8 @@ def parse_args(argv=None):
                         help="deletions up to this size do not break a spanning alignment")
     parser.add_argument("--empty-tolerance", type=int, default=50,
                         help="how far (bp) an alignment break may be from the empty-site junction")
+    parser.add_argument("--junctions", default="",
+                        help="junctions.fa from build_features.py; enables the second pass (short reads)")
     parser.add_argument("--out-breakpoints", required=True)
     parser.add_argument("--out-empty-sites", required=True)
     return parser.parse_args(argv)
@@ -104,6 +113,11 @@ class Counter:
         self.a = args
         self.paired = args.read_type == "short_pe"
         self.read_lengths = []
+        self.remapper = None
+        if args.junctions and args.read_type in SHORT_TYPES:
+            self.remapper = mappy.Aligner(args.junctions, preset="sr")
+            if not self.remapper:
+                sys.exit(f"could not load {args.junctions}")
 
     def note_length(self, read):
         if len(self.read_lengths) < 100000:
@@ -155,16 +169,20 @@ class Counter:
                     bases += max(0, min(b1, e) - max(b0, s))
         return bases / total
 
-    def empty_site(self, contig, s, e):
-        """Evidence for the contig without its segment [s, e): (split/deletion reads, read pairs)."""
-        pairs = self.empty_pairs(contig, s, e) if self.paired else 0
-        return self.empty_split(contig, s, e), pairs
+    def empty_site(self, es_id, contig, s, e, junction_pos):
+        """Evidence (template names) for the contig without its segment [s, e)."""
+        split = self.empty_split(contig, s, e)
+        pairs = self.empty_pairs(contig, s, e) if self.paired else set()
+        remap = (self.empty_remap(es_id, contig, s, e, junction_pos, split | pairs)
+                 if self.remapper else set())
+        return {"empty_split": len(split), "empty_pairs": len(pairs), "empty_remap": len(remap),
+                "empty": len(split | pairs | remap)}
 
     def empty_pairs(self, contig, s, e):
         """Pairs with the forward mate in the left flank and the reverse mate in the right flank."""
         a = self.a
         tol, seg = a.empty_tolerance, e - s
-        n = 0
+        names = set()
         for read in self.bam.fetch(contig, max(0, s - a.max_insert), s + tol):
             if (not usable(read, a.junction_min_mapq) or not read.is_paired or read.mate_is_unmapped
                     or read.is_reverse or not read.mate_is_reverse
@@ -172,8 +190,44 @@ class Counter:
                 continue
             if read.reference_end <= s + tol and read.next_reference_start >= e - tol \
                     and 0 < read.template_length - seg <= a.max_insert:
-                n += 1
-        return n
+                names.add(read.query_name)
+        return names
+
+    def remap_candidates(self, contig, s, e):
+        """Reads at the segment ends clipped towards it, or unmapped with the mate nearby."""
+        a = self.a
+        tol, ov = a.empty_tolerance, a.overhang
+        for start, end, at_left in ((max(0, s - a.max_insert), s + tol, True),
+                                    (max(0, e - tol), e + a.max_insert, False)):
+            for read in self.bam.fetch(contig, start, end):
+                if read.is_secondary or read.is_supplementary or read.is_duplicate or read.is_qcfail:
+                    continue
+                if read.is_unmapped:
+                    yield read
+                    continue
+                if read.mapping_quality < a.junction_min_mapq:
+                    continue
+                cig = read.cigartuples
+                if at_left and cig[-1][0] == 4 and cig[-1][1] >= ov and abs(read.reference_end - s) <= tol:
+                    yield read
+                elif not at_left and cig[0][0] == 4 and cig[0][1] >= ov and abs(read.reference_start - e) <= tol:
+                    yield read
+
+    def empty_remap(self, es_id, contig, s, e, junction_pos, seen):
+        """Second pass: candidates that align across the empty-site junction of es_id."""
+        a = self.a
+        names = set()
+        for read in self.remap_candidates(contig, s, e):
+            if read.query_name in seen or read.query_name in names or not read.query_sequence:
+                continue
+            for h in self.remapper.map(read.query_sequence):
+                if not h.is_primary:
+                    continue
+                if (h.ctg == es_id and h.mapq >= a.junction_min_mapq
+                        and h.r_st <= junction_pos - a.overhang and h.r_en >= junction_pos + a.overhang):
+                    names.add(read.query_name)
+                break
+        return names
 
     def empty_split(self, contig, s, e):
         """Reads that jump from just before s to just after e (deletion or split alignment)."""
@@ -201,7 +255,7 @@ class Counter:
                     if (rname == contig and sstrand == strand and int(mapq) >= a.junction_min_mapq
                             and abs(sa_start - e) <= tol and ref_len(cigar) >= ov):
                         names.add(read.query_name)
-        return len(names)
+        return names
 
 
 def main(argv=None):
@@ -230,10 +284,10 @@ def main(argv=None):
 
     erows = []
     for r in es.itertuples(index=False):
-        split, pairs = counter.empty_site(r.contig, r.shared_start, r.shared_end)
-        erows.append({"sample": args.sample, "read_type": args.read_type, "es_id": r.es_id,
-                      "empty_split": split, "empty_pairs": pairs})
-    pd.DataFrame(erows, columns=["sample", "read_type", "es_id", "empty_split", "empty_pairs"]).to_csv(
+        ev = counter.empty_site(r.es_id, r.contig, r.shared_start, r.shared_end, r.junction_pos)
+        erows.append({"sample": args.sample, "read_type": args.read_type, "es_id": r.es_id, **ev})
+    pd.DataFrame(erows, columns=["sample", "read_type", "es_id", "empty_split", "empty_pairs",
+                                 "empty_remap", "empty"]).to_csv(
         args.out_empty_sites, sep="\t", index=False)
 
     print(f"{args.sample}: {len(out)} breakpoints, {len(erows)} empty sites, "

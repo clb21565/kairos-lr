@@ -6,7 +6,8 @@ simulated (see make_sim_data.py).
 Needs snakemake, mappy, pysam, pandas, prodigal, mmseqs2, strobealign, minimap2, samtools,
 wgsim and seqkit on PATH (no --use-conda; on the HPC use run_sim.py --use-conda instead).
 
-Usage: python .tests/run_sim.py [--outdir .tests/sim] [--use-conda] [--keep] [extra snakemake args]
+Usage: python .tests/run_sim.py [--outdir .tests/sim] [--short-aligner bwa-mem2] [--use-conda]
+                                [--keep] [extra snakemake args]
 """
 
 import argparse
@@ -21,11 +22,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 
 
-def run(outdir, use_conda, extra):
+def run(outdir, use_conda, short_aligner, extra):
     subprocess.run([sys.executable, os.path.join(HERE, "make_sim_data.py"), outdir], check=True)
     open(os.path.join(outdir, "gtdb"), "w").close()     # detect taxonomy is not run here
     with open(os.path.join(outdir, "sim_config.yaml"), "w") as f:
-        f.write("call:\n  use_taxonomy: false\n")
+        f.write(f"call:\n  use_taxonomy: false\nassess:\n  short_aligner: {short_aligner}\n")
     cmd = ["snakemake", "assess", "call", "-s", os.path.join(REPO, "Snakefile"), "-d", outdir,
            "--configfile", os.path.join(REPO, "config", "config.yaml"),
            os.path.join(outdir, "sim_config.yaml"),
@@ -51,7 +52,6 @@ def check(outdir):
     c = pd.concat(counts).merge(bps[["bp_id", "contig"]], on="bp_id")
     c["junction"] = c["span"] + c["bridge"]
     e = pd.concat(empties).merge(es[["es_id", "contig"]], on="es_id")
-    e["empty"] = e["empty_split"] + e["empty_pairs"]
 
     J = c.groupby(["sample", "contig"])["junction"].min()        # weaker of the two breakpoints
     F = c.groupby(["sample", "contig"])["flank_depth"].mean()
@@ -64,6 +64,11 @@ def check(outdir):
             failures.append(msg)
 
     expect(len(bps) == 6 and len(es) == 3, f"6 breakpoints and 3 empty sites ({len(bps)}, {len(es)})")
+    # split-read evidence: from SA tags (bwa-mem2) or the second pass (strobealign)
+    R = e.set_index(["sample", "contig"])[["empty_split", "empty_remap"]].sum(axis=1)
+    expect(R["t1_short", "asm1_host1"] >= 3, f"t1_short: empty-site split reads "
+           f"({R['t1_short', 'asm1_host1']})")
+    expect((R.xs("asm2_host2", level="contig") == 0).all(), "no host2 empty-site split reads")
     for s in ("t1_short", "t1_long"):
         expect(J[s, "asm1_host1"] == 0, f"{s}: no host1 junction reads before transfer ({J[s, 'asm1_host1']})")
         expect(E[s, "asm1_host1"] >= 5, f"{s}: host1 empty site seen ({E[s, 'asm1_host1']})")
@@ -108,12 +113,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--outdir", default=os.path.join(HERE, "sim"))
     ap.add_argument("--use-conda", action="store_true")
+    ap.add_argument("--short-aligner", default="strobealign", choices=["strobealign", "bwa-mem2"])
     ap.add_argument("--keep", action="store_true", help="reuse an existing outdir (no re-simulation)")
     args, extra = ap.parse_known_args()
     if not args.keep:
         shutil.rmtree(args.outdir, ignore_errors=True)
         os.makedirs(args.outdir)
-        run(args.outdir, args.use_conda, extra)
+        run(args.outdir, args.use_conda, args.short_aligner, extra)
     failures = check(args.outdir)
     print(f"\n{len(failures)} failed" if failures else "\nall checks passed")
     sys.exit(1 if failures else 0)

@@ -91,6 +91,8 @@ assess:
     long: 100
   max_insert: 1000                # largest insert for a bridging read pair
   empty_tolerance: 50             # bp an alignment break may sit from the empty-site junction
+  second_pass: true               # short reads: realign clipped/unmapped reads near segment ends to
+                                  # the empty-site sequences (split-read evidence for strobealign)
 
 
 # ── Call: detection states and in situ events ───────────────────────────────

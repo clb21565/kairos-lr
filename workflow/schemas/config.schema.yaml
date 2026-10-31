@@ -46,7 +46,8 @@ properties:
         required: [short, long]
       max_insert:        {type: integer, minimum: 1}
       empty_tolerance:   {type: integer, minimum: 0}
-    required: [short_aligner, short_read_length, long_read_presets, min_mapq, junction_min_mapq, overhang, max_insert, empty_tolerance]
+      second_pass:       {type: boolean}
+    required: [short_aligner, short_read_length, long_read_presets, min_mapq, junction_min_mapq, overhang, max_insert, empty_tolerance, second_pass]
   call:
     type: object
     properties:

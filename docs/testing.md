@@ -35,8 +35,7 @@ python -m pytest tests/
 
 ```bash
 python .tests/run_sim.py                          # strobealign
-python .tests/run_sim.py --outdir .tests/sim_bwa \
-    --configfile config/config.yaml bwa.yaml      # bwa-mem2 (bwa.yaml: assess: {short_aligner: bwa-mem2})
+python .tests/run_sim.py --outdir .tests/sim_bwa --short-aligner bwa-mem2
 ```
 
 This simulates a ~4 kb gene cassette shared by host1–3. host1 also exists without the

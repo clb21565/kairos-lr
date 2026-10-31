@@ -103,13 +103,15 @@ rule count_features:
         bai=f"{ASM}/{{sample}}/{{sample}}.bam.bai",
         breakpoints=f"{DET}.features/breakpoints.tsv",
         flanks=f"{DET}.features/flanks.bed",
-        empty_sites=f"{DET}.features/empty_sites.tsv"
+        empty_sites=f"{DET}.features/empty_sites.tsv",
+        junctions=f"{DET}.features/junctions.fa"
     output:
         breakpoints=f"{ASM}/{{sample}}/{{sample}}.breakpoint_counts.tsv",
         empty_sites=f"{ASM}/{{sample}}/{{sample}}.empty_site_counts.tsv"
     params:
         read_type=read_type,
-        overhang=lambda wc: ASSESS["overhang"]["short" if read_type(wc) in SHORT_TYPES else "long"]
+        overhang=lambda wc: ASSESS["overhang"]["short" if read_type(wc) in SHORT_TYPES else "long"],
+        junctions=lambda wc, input: f"--junctions {input.junctions}" if ASSESS["second_pass"] else ""
     conda:
         "../envs/python.yaml"
     shell:
@@ -125,5 +127,6 @@ rule count_features:
         " --junction-min-mapq {ASSESS[junction_min_mapq]}"
         " --max-insert {ASSESS[max_insert]}"
         " --empty-tolerance {ASSESS[empty_tolerance]}"
+        " {params.junctions}"
         " --out-breakpoints {output.breakpoints}"
         " --out-empty-sites {output.empty_sites}"
