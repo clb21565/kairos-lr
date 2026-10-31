@@ -30,6 +30,23 @@ properties:
       junction_flank: {type: integer, minimum: 1}
       snap:           {type: integer, minimum: 0}
     required: [window, min_identity, min_flank, flank_len, junction_flank, snap]
+  assess:
+    type: object
+    properties:
+      short_aligner:     {type: string, enum: [strobealign, bwa-mem2]}
+      short_read_length: {type: integer, minimum: 30}
+      long_read_presets: {type: object, additionalProperties: {type: string}}
+      min_mapq:          {type: integer, minimum: 0}
+      junction_min_mapq: {type: integer, minimum: 0}
+      overhang:
+        type: object
+        properties:
+          short: {type: integer, minimum: 1}
+          long:  {type: integer, minimum: 1}
+        required: [short, long]
+      max_insert:        {type: integer, minimum: 1}
+      empty_tolerance:   {type: integer, minimum: 0}
+    required: [short_aligner, short_read_length, long_read_presets, min_mapq, junction_min_mapq, overhang, max_insert, empty_tolerance]
   annotation:
     type: object
     additionalProperties:
@@ -40,4 +57,4 @@ properties:
         sc: {type: number}
       required: [id, qc, sc]
   wf_version:      {type: string}
-required: [catalogue, gtdb_db, features, annotation]
+required: [catalogue, gtdb_db, features, assess, annotation]

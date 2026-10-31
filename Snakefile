@@ -34,6 +34,14 @@ if config.get("samples"):
         dups = SAMPLES.loc[SAMPLES["sample"].duplicated(), "sample"].unique()
         sys.exit(f"Duplicate sample IDs in {config['samples']}: {', '.join(dups)}")
     SAMPLES = SAMPLES.set_index("sample", drop=False)
+    for rt in set(SAMPLES["read_type"]) - {"short_pe", "short_se"}:
+        if rt not in config["assess"]["long_read_presets"]:
+            sys.exit(f"No minimap2 preset for read_type '{rt}' (config: assess.long_read_presets)")
+    n_reads = SAMPLES["reads"].str.split(",").str.len()
+    bad = SAMPLES[(SAMPLES["read_type"] == "short_pe") != (n_reads == 2)]
+    if len(bad):
+        sys.exit("short_pe samples need two comma-separated read files (and only they): "
+                 + ", ".join(bad["sample"]))
 
 # ── Parameters for identifying HGT (mmseqs ORF clustering, derep-detect) ────
 MINSEQID      = config["min_seq_id"]
@@ -61,6 +69,9 @@ GTDB_DB = config["gtdb_db"]
 # ── Feature parameters (build_features.py) ──────────────────────────────────
 FEATURES = config["features"]
 
+# ── Assess parameters (read mapping, count_features.py) ─────────────────────
+ASSESS = config["assess"]
+
 # ── Script paths ────────────────────────────────────────────────────────────
 SCRIPTS_DIR = config.get("scripts_dir") or os.path.join(workflow.basedir, "scripts")
 
@@ -68,6 +79,7 @@ kairos_dd = os.path.join(SCRIPTS_DIR, "kairos-dd-v2.py")
 regions   = os.path.join(SCRIPTS_DIR, "regions-v2.py")
 get_HGT   = os.path.join(SCRIPTS_DIR, "get_hgt-v2.py")
 build_features = os.path.join(SCRIPTS_DIR, "build_features.py")
+count_features = os.path.join(SCRIPTS_DIR, "count_features.py")
 
 
 # ── Startup checks ───────────────────────────────────────────────────────────
@@ -99,13 +111,28 @@ def detect_targets():
         *[f"{DET}-{name}.tsv" for name in ANNOTATION_DBS],
     ]
 
+def assess_targets():
+    if SAMPLES is None:
+        return []
+    return expand([
+        "results/assess/{sample}/{sample}.breakpoint_counts.tsv",
+        "results/assess/{sample}/{sample}.empty_site_counts.tsv",
+        "results/assess/{sample}/{sample}.coverage.tsv",
+    ], sample=SAMPLES.index)
+
 rule all:
     input:
-        detect_targets()
+        detect_targets(),
+        assess_targets()
 
 rule detect:
     input:
         detect_targets()
+
+# assess only needs the features, not taxonomy or annotation
+rule assess:
+    input:
+        assess_targets()
 
 
 # ── Rule modules ─────────────────────────────────────────────────────────────
@@ -116,3 +143,4 @@ include: "workflow/rules/taxonomy.smk"
 include: "workflow/rules/hgt_classification.smk"
 include: "workflow/rules/annotation.smk"
 include: "workflow/rules/features.smk"
+include: "workflow/rules/assess.smk"

@@ -76,6 +76,23 @@ features:
   snap: 10              # breakpoints closer than this on the same contig are merged
 
 
+# ── Assess: read mapping and counting (count_features.py) ───────────────────
+assess:
+  short_aligner: strobealign      # or bwa-mem2
+  short_read_length: 150          # strobealign index is built for this read length
+  long_read_presets:              # minimap2 -x preset per long read_type
+    ont: map-ont                  # lr:hq for recent high-accuracy ONT (R10.4, Q20+)
+    hifi: map-hifi
+  min_mapq: 20                    # flank depth and contig coverage
+  junction_min_mapq: 1            # junction reads/pairs: only ties (MAPQ 0) are excluded, because
+                                  # reads partly in shared sequence get modest MAPQ even when placed right
+  overhang:                       # aligned bp needed on each side of a junction
+    short: 25
+    long: 100
+  max_insert: 1000                # largest insert for a bridging read pair
+  empty_tolerance: 50             # bp an alignment break may sit from the empty-site junction
+
+
 # ── Functional annotation thresholds ────────────────────────────────────────
 # Passed to `diamond blastp --id / --query-cover / --subject-cover`.
 annotation:
