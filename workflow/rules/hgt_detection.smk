@@ -1,59 +1,63 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # hgt_detection.smk
 # Detect putative HGT regions from clustered ORFs, merge nearby hits, and
-# extract/classify the candidate regions (regions2.py).
+# extract/classify the candidate regions (regions-v2.py).
 #
 # Expects the following to already be defined by the top-level Snakefile:
-#   PADDING, SLOP, kairos_dd, regions
+#   DET, MIN_CONTIG_ORFS, MERGE_DISTANCE, EDGE_PADDING, SLOP, kairos_dd, regions
 # ─────────────────────────────────────────────────────────────────────────────
 
 rule run_derep_detect:
     input:
-        coords = "result/{sample}.ffn_coords.tsv",
-        clusts = "result/{sample}.ffn.clusts_cluster.tsv",
-        fai    = "result/{sample}.fasta.fai"
+        coords = f"{DET}.ffn_coords.tsv",
+        clusts = f"{DET}.ffn.clusts_cluster.tsv",
+        fai    = f"{DET}.fa.fai"
     params:
-        out_prefix = "result/{sample}.kairos"
+        out_prefix = f"{DET}.kairos"
     output:
-        "result/{sample}.kairos_potential_hgts.bed",
-        "result/{sample}.kairos_deduplicated_overlaps.tsv"
+        f"{DET}.kairos_potential_hgts.bed",
+        f"{DET}.kairos_deduplicated_overlaps.tsv"
+    conda:
+        "../envs/python.yaml"
     shell:
         """
-        python {kairos_dd} --input_clust_file {input.clusts} --minimum_orfs 3 --max_overlap 1 --out_prefix {params.out_prefix} --coords_file {input.coords} --contigMD {input.fai}
+        python {kairos_dd} --input_clust_file {input.clusts} --minimum_orfs {MIN_CONTIG_ORFS} --max_overlap 1 --out_prefix {params.out_prefix} --coords_file {input.coords} --contigMD {input.fai}
         """
 
 
 rule get_merged_bed:
     input:
-        "result/{sample}.kairos_potential_hgts.bed"
+        f"{DET}.kairos_potential_hgts.bed"
     output:
-        "result/{sample}.kairos_merged_potential_hgts.bed"
+        f"{DET}.kairos_merged_potential_hgts.bed"
+    conda:
+        "../envs/python.yaml"
     shell:
         """
-        bedtools sort -i {input} | bedtools merge -c 1,5 -o count,collapse -d {PADDING} > {output}
+        bedtools sort -i {input} | bedtools merge -c 1,5 -o count,collapse -d {MERGE_DISTANCE} > {output}
         """
 
 
 rule run_regions:
     input:
-        fasta="{sample}.fasta",
-        hgt_bed="result/{sample}.kairos_merged_potential_hgts.bed",
-        contig_overlaps="result/{sample}.kairos_deduplicated_overlaps.tsv",
-        fai="result/{sample}.fasta.fai"
-    params:
-        out_prefix = "result/{sample}"
+        fasta=f"{DET}.fa",
+        hgt_bed=f"{DET}.kairos_merged_potential_hgts.bed",
+        contig_overlaps=f"{DET}.kairos_deduplicated_overlaps.tsv",
+        fai=f"{DET}.fa.fai"
     output:
-        region_overlaps="result/{sample}.kairos_region_overlaps.tsv",
-        filtered_overlaps="result/{sample}.kairos_filtered_overlaps.tsv",
-        region_metadata="result/{sample}.kairos_region_metadata.tsv",
-        fasta="result/{sample}.potential_hgt_regions.fasta",
-        bed="result/{sample}.potential_hgt_regions.bed"
+        region_overlaps=f"{DET}.kairos_region_overlaps.tsv",
+        filtered_overlaps=f"{DET}.kairos_filtered_overlaps.tsv",
+        region_metadata=f"{DET}.kairos_region_metadata.tsv",
+        fasta=f"{DET}.potential_hgt_regions.fasta",
+        bed=f"{DET}.potential_hgt_regions.bed"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python {regions}"
         " -b {input.hgt_bed}"
         " -o {input.contig_overlaps}"
         " -f {input.fai}"
-        " -p 1000"
+        " -p {EDGE_PADDING}"
         " --region-overlaps-output {output.region_overlaps}"
         " --filtered-overlaps-output {output.filtered_overlaps}"
         " --region-metadata-output {output.region_metadata}"

@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# kairos-lr config
+#
+# Fill in the catalogue, the sample sheet (for assess) and the database paths,
+# then run, e.g.
+#   snakemake --use-conda -j 4                         # locally
+#   snakemake --profile profiles/slurm                 # on SLURM
+# Any key can be overridden on the command line with --config key=value.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Input ────────────────────────────────────────────────────────────────────
+# One dereplicated contig catalogue (FASTA), built beforehand: ideally the long-read
+# assemblies of the study, contigs prefixed with their assembly ID and dereplicated
+# at 99%. Contig names must be unique and must not contain spaces.
+catalogue: catalogue.fa
+# Name used for the detect outputs: results/detect/<catalogue_name>.*
+catalogue_name: catalogue
+
+# Sample sheet (TSV) for assess / call; see config/samples.example.tsv.
+# Leave empty to run detect only.
+samples: ""
+
+
+# ── Reference databases ─────────────────────────────────────────────────────
+# mmseqs-formatted GTDB database (required), used for taxonomic assignment of
+# contigs and candidate HGT regions. Build with `mmseqs databases GTDB <out> <tmp>`.
+gtdb_db: /projects/MA/HGT/gtdb_v232/gtdb
+
+# Protein FASTA / diamond databases for annotation (optional: leave empty to skip).
+# RIP (replication initiation protein) database, used for plasmid typing.
+ripdb: /home/bio.aau.dk/se70ol/databases/nine_reps/ripdb.faa
+# mobileOG-db (mobile genetic element ontology).
+mobileog: ""
+# CARD (Comprehensive Antibiotic Resistance Database) protein homolog models.
+card: /home/bio.aau.dk/se70ol/databases/card/protein_fasta_protein_homolog_model.fasta
+
+
+# ── Scripts ──────────────────────────────────────────────────────────────────
+# By default the scripts shipped in scripts/ next to the Snakefile are used.
+# scripts_dir: /path/to/dev-scripts/
+
+
+# ── General parameters ───────────────────────────────────────────────────────
+threads: 4
+
+
+# ── ORF clustering (mmseqs easy-cluster) ────────────────────────────────────
+min_seq_id: 0.99   # minimum sequence identity for clustering
+min_cov: 0.8       # minimum query coverage for clustering
+minlen: 1000       # minimum ORF/region length considered
+
+
+# ── HGT region detection ─────────────────────────────────────────────────────
+# min_contig_orfs: contigs with fewer ORFs are not used by derep-detect
+min_contig_orfs: 3
+# merge_distance: candidate HGT ORFs closer than this (bp) are merged into one region
+merge_distance: 1000
+# edge_padding: regions within this distance (bp) of a contig end are edge regions
+edge_padding: 1000
+# slop: extra bp either side of a region when extracting its sequence for taxonomy
+slop: 1000
+
+
+# ── Functional annotation thresholds ────────────────────────────────────────
+# Passed to `diamond blastp --id / --query-cover / --subject-cover`.
+annotation:
+  ripdb:    {id: 20, qc: 80, sc: 80}
+  mobileog: {id: 20, qc: 80, sc: 80}
+  card:     {id: 90, qc: 50, sc: 50}
+
+
+# ── Workflow metadata ────────────────────────────────────────────────────────
+wf_version: "0.2.0-dev"

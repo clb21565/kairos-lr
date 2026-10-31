@@ -4,27 +4,48 @@
 # using mmseqs taxonomy against a GTDB-formatted database.
 #
 # Expects the following to already be defined by the top-level Snakefile:
-#   THREADS, GTDB_DB   (path to the mmseqs-formatted GTDB database)
+#   THREADS, DET, GTDB_DB   (path to the mmseqs-formatted GTDB database)
 # ─────────────────────────────────────────────────────────────────────────────
 
-rule taxonomic_annotation:
+MMSEQS_TAXONOMY_OPTS = "--tax-lineage 1 --majority 0.5 --vote-mode 1 --lca-mode 3 --orf-filter 1"
+
+rule taxonomy_contigs:
     input:
-        fasta="{sample}.fasta",
-        region_fasta="result/{sample}.potential_hgt_regions.fasta"
+        f"{DET}.fa"
     output:
-        taxonomy_result="result/{sample}.assignRes2.tsv",
-        region_taxonomy_result="result/{sample}.potential_hgt_regions.taxonomy.tsv"
+        f"{DET}.assignRes2.tsv"
     threads: THREADS
     params:
         database=GTDB_DB,
-        outname="result/{sample}.mmseqs_taxonomy"
+        outname=f"{DET}.mmseqs_taxonomy",
+        tmp=f"{DET}.mmseqs_taxonomy_contigs_tmp"
+    conda:
+        "../envs/mmseqs.yaml"
     shell:
         """
-        mmseqs createdb {input.fasta} {params.outname}.contigs
-        mmseqs taxonomy {params.outname}.contigs {params.database} {params.outname}.assignments tmpFolder --tax-lineage 1 --majority 0.5 --vote-mode 1 --lca-mode 3 --orf-filter 1 --threads {threads}
-        mmseqs createtsv {params.outname}.contigs {params.outname}.assignments {output.taxonomy_result}
-        mmseqs createdb {input.region_fasta} {params.outname}.regions
-        mmseqs taxonomy {params.outname}.regions {params.database} {params.outname}.regions.assignments tmpFolder --tax-lineage 1 --majority 0.5 --vote-mode 1 --lca-mode 3 --orf-filter 1 --threads {threads}
-        mmseqs createtsv {params.outname}.regions {params.outname}.regions.assignments {output.region_taxonomy_result}
+        mmseqs createdb {input} {params.outname}.contigs
+        mmseqs taxonomy {params.outname}.contigs {params.database} {params.outname}.assignments {params.tmp} {MMSEQS_TAXONOMY_OPTS} --threads {threads}
+        mmseqs createtsv {params.outname}.contigs {params.outname}.assignments {output}
+        rm -rf {params.tmp}
         """
 
+
+rule taxonomy_regions:
+    input:
+        f"{DET}.potential_hgt_regions.fasta"
+    output:
+        f"{DET}.potential_hgt_regions.taxonomy.tsv"
+    threads: THREADS
+    params:
+        database=GTDB_DB,
+        outname=f"{DET}.mmseqs_taxonomy",
+        tmp=f"{DET}.mmseqs_taxonomy_regions_tmp"
+    conda:
+        "../envs/mmseqs.yaml"
+    shell:
+        """
+        mmseqs createdb {input} {params.outname}.regions
+        mmseqs taxonomy {params.outname}.regions {params.database} {params.outname}.regions.assignments {params.tmp} {MMSEQS_TAXONOMY_OPTS} --threads {threads}
+        mmseqs createtsv {params.outname}.regions {params.outname}.regions.assignments {output}
+        rm -rf {params.tmp}
+        """

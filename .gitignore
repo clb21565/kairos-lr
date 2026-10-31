@@ -9,3 +9,5 @@ hgt_viz
 *txt
 .snake*
 clinker
+results/
+.tests/**/results/

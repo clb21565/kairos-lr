@@ -1,19 +1,24 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # clustering.smk
-# Cluster predicted proteins with mmseqs2 as the basis for HGT region detection.
+# Cluster predicted ORFs (nucleotide) with mmseqs2 as the basis for HGT region detection.
 #
 # Expects the following to already be defined by the top-level Snakefile:
-#   THREADS, MINSEQID, MINQUERYCOVER
+#   THREADS, DET, MINSEQID, MINQUERYCOVER
 # ─────────────────────────────────────────────────────────────────────────────
 
-rule cluster_proteins:
+rule cluster_orfs:
     input:
-        ffn="result/{sample}.ffn"
+        ffn=f"{DET}.ffn"
     output:
-        "result/{sample}.ffn.clusts_cluster.tsv"
+        f"{DET}.ffn.clusts_cluster.tsv"
+    params:
+        prefix=f"{DET}.ffn.clusts",
+        tmp=f"{DET}.mmseqs_cluster_tmp"
     threads: THREADS
+    conda:
+        "../envs/mmseqs.yaml"
     shell:
         """
-        mmseqs easy-cluster {input.ffn} {input}.clusts clusts.tmp --min-seq-id {MINSEQID} -c {MINQUERYCOVER} --cov-mode 1 --threads {threads}
+        mmseqs easy-cluster {input.ffn} {params.prefix} {params.tmp} --min-seq-id {MINSEQID} -c {MINQUERYCOVER} --cov-mode 1 --threads {threads}
+        rm -rf {params.tmp}
         """
-

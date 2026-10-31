@@ -1,0 +1,11 @@
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.12
+  - pandas>=2.2
+  - numpy
+  - networkx
+  - pysam>=0.22
+  - bedtools=2.31

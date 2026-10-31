@@ -1,29 +1,12 @@
+# Launcher environment: Snakemake itself. The tools each rule needs are installed
+# automatically from workflow/envs/*.yaml when run with --use-conda (or the slurm profile).
 name: kairos-lr
 channels:
   - conda-forge
+  - bioconda
+  - nodefaults
 dependencies:
-  - python=3.12.2
-  - nextflow=24.04.2
-  - blast=2.15.0
-  - minimap2=2.27
-  - diamond=2.1.9
-  - samtools=1.19.2
-  - bedtools=2.31.1
-  - salmon=1.10.3
-  - prodigal=2.6.3
-  - mmseqs2
+  - python=3.12
+  - snakemake>=9.9
+  - snakemake-executor-plugin-slurm
   - pandas
-  - ca-certificates
-  - openssl
-  - ipykernel
-  - matplotlib
-  - numpy
-  - pysam
-  - bioconda::veryfasttree
-  - bioconda::clinker-py
-  - bioconda::tbl2asn-forever
-  - seqkit
-  - prokka
-  - snakemake
-  - graphviz
-    # my build prefix: /home/bio.aau.dk/se70ol/.conda/envs/kairos1

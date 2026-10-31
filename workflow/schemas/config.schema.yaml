@@ -1,0 +1,31 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: kairos-lr configuration
+type: object
+properties:
+  catalogue:       {type: string, description: dereplicated contig catalogue (FASTA)}
+  catalogue_name:  {type: string, pattern: "^[A-Za-z0-9_-]+$", default: catalogue}
+  samples:         {type: [string, "null"], default: ""}
+  gtdb_db:         {type: string}
+  ripdb:           {type: [string, "null"], default: ""}
+  mobileog:        {type: [string, "null"], default: ""}
+  card:            {type: [string, "null"], default: ""}
+  scripts_dir:     {type: string}
+  threads:         {type: integer, minimum: 1, default: 4}
+  min_seq_id:      {type: number, minimum: 0, maximum: 1, default: 0.99}
+  min_cov:         {type: number, minimum: 0, maximum: 1, default: 0.8}
+  minlen:          {type: integer, minimum: 0, default: 1000}
+  min_contig_orfs: {type: integer, minimum: 1, default: 3}
+  merge_distance:  {type: integer, minimum: 0, default: 1000}
+  edge_padding:    {type: integer, minimum: 0, default: 1000}
+  slop:            {type: integer, minimum: 0, default: 1000}
+  annotation:
+    type: object
+    additionalProperties:
+      type: object
+      properties:
+        id: {type: number}
+        qc: {type: number}
+        sc: {type: number}
+      required: [id, qc, sc]
+  wf_version:      {type: string}
+required: [catalogue, gtdb_db, annotation]

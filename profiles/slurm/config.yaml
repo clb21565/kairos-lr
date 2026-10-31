@@ -1,0 +1,32 @@
+# Snakemake profile for SLURM (needs snakemake-executor-plugin-slurm).
+# Usage: snakemake --profile profiles/slurm
+executor: slurm
+jobs: 50
+use-conda: true
+latency-wait: 60
+rerun-incomplete: true
+printshellcmds: true
+
+default-resources:
+  slurm_partition: shared
+  # slurm_account: <your account>
+  mem_mb: 16000
+  runtime: 720       # minutes
+
+set-threads:
+  cluster_orfs: 32
+  taxonomy_contigs: 64
+  taxonomy_regions: 32
+  diamond_annotate: 32
+
+set-resources:
+  cluster_orfs:
+    mem_mb: 128000
+  taxonomy_contigs:
+    mem_mb: 350000
+    runtime: 4320
+  taxonomy_regions:
+    mem_mb: 200000
+    runtime: 1440
+  diamond_annotate:
+    mem_mb: 64000

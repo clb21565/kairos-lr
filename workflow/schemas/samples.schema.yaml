@@ -1,0 +1,30 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: >
+  kairos-lr sample sheet, one row per sequenced sample. Extra columns are allowed
+  and passed through to the outputs.
+type: object
+properties:
+  sample:
+    type: string
+    pattern: "^[A-Za-z0-9_.-]+$"
+    description: unique sample ID
+  assembly:
+    type: string
+    description: optional; the assembly this sample contributed to the catalogue (provenance only)
+  reads:
+    type: string
+    minLength: 1
+    description: one FASTQ path, or two comma-separated paths for paired-end
+  read_type:
+    type: string
+    enum: [short_pe, short_se, ont, hifi]
+  timepoint:
+    type: string
+    description: date or number; only the order matters (needed for in situ calls)
+  group:
+    type: string
+    description: in situ calls only compare samples within one group (e.g. site)
+  fraction:
+    type: string
+    description: free text (e.g. INF, EFF); config says which fractions are observed / prior
+required: [sample, reads, read_type]

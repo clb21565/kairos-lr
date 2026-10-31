@@ -1,0 +1,5 @@
+sample	assembly	reads	read_type	timepoint	group	fraction
+CB_2020-08-04_INF	CB_0804_INF	reads/CB_0804_INF_R1.fq.gz,reads/CB_0804_INF_R2.fq.gz	short_pe	2020-08-04	CB	INF
+CB_2020-08-04_EFF		reads/CB_0804_EFF_R1.fq.gz,reads/CB_0804_EFF_R2.fq.gz	short_pe	2020-08-04	CB	EFF
+CB_2020-08-04_INF_ont	CB_0804_INF	reads/CB_0804_INF.ont.fq.gz	ont	2020-08-04	CB	INF
+CB_2020-08-07_INF		reads/CB_0807_INF_R1.fq.gz,reads/CB_0807_INF_R2.fq.gz	short_pe	2020-08-07	CB	INF
