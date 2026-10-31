@@ -49,6 +49,8 @@ threads: 4
 min_seq_id: 0.99   # minimum sequence identity for clustering
 min_cov: 0.8       # minimum query coverage for clustering
 minlen: 1000       # minimum ORF/region length considered
+cluster_method: easy-cluster   # or easy-linclust (much less memory; near-identical clusters at 99% identity)
+mmseqs_split_memory: ""   # e.g. 2G; passed as --split-memory-limit when set (small machines)
 
 
 # ── HGT region detection ─────────────────────────────────────────────────────
@@ -60,6 +62,18 @@ merge_distance: 1000
 edge_padding: 1000
 # slop: extra bp either side of a region when extracting its sequence for taxonomy
 slop: 1000
+
+
+# ── Junction features (build_features.py) ───────────────────────────────────
+# Each pair of shared regions is aligned to find where the shared sequence really
+# ends; the breakpoints, their flanks and the empty sites are what assess counts.
+features:
+  window: 5000          # bp either side of each region included in the pairwise alignment
+  min_identity: 0.95    # minimum identity of the aligned shared segment
+  min_flank: 200        # less own sequence than this beyond a breakpoint = contig end (no breakpoint)
+  flank_len: 1000       # own sequence next to each breakpoint used for flank depth
+  junction_flank: 500   # bp either side of the junction in junction windows / empty-site sequences
+  snap: 10              # breakpoints closer than this on the same contig are merged
 
 
 # ── Functional annotation thresholds ────────────────────────────────────────

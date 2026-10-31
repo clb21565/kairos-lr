@@ -13,12 +13,14 @@ rule cluster_orfs:
         f"{DET}.ffn.clusts_cluster.tsv"
     params:
         prefix=f"{DET}.ffn.clusts",
-        tmp=f"{DET}.mmseqs_cluster_tmp"
+        tmp=f"{DET}.mmseqs_cluster_tmp",
+        method=config["cluster_method"],
+        mem=f"--split-memory-limit {config['mmseqs_split_memory']}" if config.get("mmseqs_split_memory") else ""
     threads: THREADS
     conda:
         "../envs/mmseqs.yaml"
     shell:
         """
-        mmseqs easy-cluster {input.ffn} {params.prefix} {params.tmp} --min-seq-id {MINSEQID} -c {MINQUERYCOVER} --cov-mode 1 --threads {threads}
+        mmseqs {params.method} {input.ffn} {params.prefix} {params.tmp} --min-seq-id {MINSEQID} -c {MINQUERYCOVER} --cov-mode 1 --threads {threads} {params.mem}
         rm -rf {params.tmp}
         """

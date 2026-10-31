@@ -9,3 +9,4 @@ dependencies:
   - networkx
   - pysam>=0.22
   - bedtools=2.31
+  - mappy>=2.26

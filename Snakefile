@@ -58,12 +58,16 @@ ANNOTATION_DBS = {
 }
 GTDB_DB = config["gtdb_db"]
 
+# ── Feature parameters (build_features.py) ──────────────────────────────────
+FEATURES = config["features"]
+
 # ── Script paths ────────────────────────────────────────────────────────────
 SCRIPTS_DIR = config.get("scripts_dir") or os.path.join(workflow.basedir, "scripts")
 
 kairos_dd = os.path.join(SCRIPTS_DIR, "kairos-dd-v2.py")
 regions   = os.path.join(SCRIPTS_DIR, "regions-v2.py")
 get_HGT   = os.path.join(SCRIPTS_DIR, "get_hgt-v2.py")
+build_features = os.path.join(SCRIPTS_DIR, "build_features.py")
 
 
 # ── Startup checks ───────────────────────────────────────────────────────────
@@ -91,6 +95,7 @@ def detect_targets():
         f"{DET}.assignRes2.tsv",
         f"{DET}.potential_hgt_regions.taxonomy.tsv",
         f"{DET}.hgt/",
+        f"{DET}.features/events.tsv",
         *[f"{DET}-{name}.tsv" for name in ANNOTATION_DBS],
     ]
 
@@ -110,3 +115,4 @@ include: "workflow/rules/hgt_detection.smk"
 include: "workflow/rules/taxonomy.smk"
 include: "workflow/rules/hgt_classification.smk"
 include: "workflow/rules/annotation.smk"
+include: "workflow/rules/features.smk"

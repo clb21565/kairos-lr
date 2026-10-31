@@ -13,11 +13,23 @@ properties:
   threads:         {type: integer, minimum: 1, default: 4}
   min_seq_id:      {type: number, minimum: 0, maximum: 1, default: 0.99}
   min_cov:         {type: number, minimum: 0, maximum: 1, default: 0.8}
+  cluster_method:  {type: string, enum: [easy-cluster, easy-linclust], default: easy-cluster}
+  mmseqs_split_memory: {type: [string, "null"], default: ""}
   minlen:          {type: integer, minimum: 0, default: 1000}
   min_contig_orfs: {type: integer, minimum: 1, default: 3}
   merge_distance:  {type: integer, minimum: 0, default: 1000}
   edge_padding:    {type: integer, minimum: 0, default: 1000}
   slop:            {type: integer, minimum: 0, default: 1000}
+  features:
+    type: object
+    properties:
+      window:         {type: integer, minimum: 0}
+      min_identity:   {type: number, minimum: 0, maximum: 1}
+      min_flank:      {type: integer, minimum: 0}
+      flank_len:      {type: integer, minimum: 1}
+      junction_flank: {type: integer, minimum: 1}
+      snap:           {type: integer, minimum: 0}
+    required: [window, min_identity, min_flank, flank_len, junction_flank, snap]
   annotation:
     type: object
     additionalProperties:
@@ -28,4 +40,4 @@ properties:
         sc: {type: number}
       required: [id, qc, sc]
   wf_version:      {type: string}
-required: [catalogue, gtdb_db, annotation]
+required: [catalogue, gtdb_db, features, annotation]

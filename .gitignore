@@ -11,3 +11,5 @@ hgt_viz
 clinker
 results/
 .tests/**/results/
+.tests/sim/
+__pycache__/
