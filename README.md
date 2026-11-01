@@ -159,4 +159,4 @@ kairos-lr/
 
 ## License
 
-[MIT](LICENSE)
+GNU General Public License v3.0 ([GPL-3.0](LICENSE)).

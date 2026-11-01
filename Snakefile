@@ -1,7 +1,7 @@
 # DESCRIPTION: Snakemake workflow for detecting HGT regions in a dereplicated contig catalogue
 #              (detect) and scoring them in sequenced samples (assess)
 # AUTHOR: connor brown
-# LICENSE: GNU General Public License
+# LICENSE: GNU General Public License v3.0 (see LICENSE)
 
 import os
 import sys
