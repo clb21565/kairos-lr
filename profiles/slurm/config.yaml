@@ -23,10 +23,10 @@ set-resources:
   cluster_orfs:
     mem_mb: 128000
   taxonomy_contigs:
-    mem_mb: 350000
+    mem_mb: 650000     # GTDB mmseqs taxonomy; 350G was too small
     runtime: 4320
   taxonomy_regions:
-    mem_mb: 200000
+    mem_mb: 650000     # same GTDB database, so same memory as taxonomy_contigs
     runtime: 1440
   diamond_annotate:
     mem_mb: 64000

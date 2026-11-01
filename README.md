@@ -106,6 +106,13 @@ snakemake --use-conda -j 8 call
 snakemake --profile profiles/slurm            # on SLURM; edit partition/resources in the profile
 ```
 
+On SLURM, submit from the repo root. Each script reads `$WORKDIR/config.yaml` (default: the repo's `config/config.yaml`):
+
+```bash
+WORKDIR=/path/to/run sbatch slurm/kairos_driver.sbatch        # 1-CPU driver job; each rule is its own job (profiles/slurm)
+WORKDIR=/path/to/run sbatch slurm/kairos_single_node.sbatch   # alternative: everything in one 64-CPU / 650G job
+```
+
 Any config key can be overridden on the command line, e.g. `--config catalogue=cat.fa samples=samples.tsv`.
 
 ## Output
@@ -150,7 +157,8 @@ kairos-lr/
 │   └── schemas/               # config and sample sheet validation
 ├── scripts/                   # kairos-dd-v2, regions-v2, get_hgt-v2, build_features,
 │                              # count_features, detect_state, insitu
-├── profiles/slurm/            # SLURM profile
+├── profiles/slurm/            # SLURM profile (per-rule resources)
+├── slurm/                     # sbatch scripts: driver job, single-node job
 ├── tests/                     # unit tests (pytest)
 ├── .tests/                    # simulated study (make_sim_data.py, run_sim.py)
 ├── docs/
