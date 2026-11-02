@@ -338,11 +338,12 @@ def compute_graph_stats(hgt_df: pd.DataFrame,
     g = nx.from_pandas_edgelist(fg, source=donor_col, target=recipient_col,
                                 create_using=nx.DiGraph())
     pr = nx.pagerank(g)
+    indeg, outdeg = dict(g.in_degree()), dict(g.out_degree())
     return pd.DataFrame({
         "node":      list(pr),
         "page_rank": list(pr.values()),
-        "indegree":  [dict(g.in_degree())[n]  for n in pr],
-        "outdegree": [dict(g.out_degree())[n] for n in pr],
+        "indegree":  [indeg[n]  for n in pr],
+        "outdegree": [outdeg[n] for n in pr],
     })
 
 # ---------------------------------------------------------------------------

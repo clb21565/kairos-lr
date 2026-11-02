@@ -7,6 +7,7 @@ dependencies:
   - pandas>=2.2
   - numpy
   - networkx
+  - scipy            # networkx.pagerank (get_hgt-v2.py)
   - pysam>=0.22
   - bedtools=2.31
   - mappy>=2.26
