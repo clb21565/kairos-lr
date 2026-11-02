@@ -13,3 +13,4 @@ results/
 .tests/**/results/
 .tests/sim*/
 __pycache__/
+.tests/bench/

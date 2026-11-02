@@ -84,22 +84,47 @@ profile's partition, account and resources are accepted. Run it once after any e
 
 ## Tier 3: short-read aligner benchmark (HPC)
 
-Open question from the design: should strobealign or bwa-mem2 be the default?
+Open question from the design: should strobealign or bwa-mem2 be the default, and which
+`junction_min_mapq`? Script: `tools/aligner_benchmark.py` (env `tools/aligner_benchmark.yaml`,
+job `slurm/aligner_benchmark.sbatch`).
 
-1. Take real contigs from the catalogue. Make strain variants at 99.0, 99.5 and 99.8% ANI
-   (substitutions and small indels), and insert a known cassette into some of them at
-   known breakpoints.
-2. Simulate 150 bp pairs at 2–30× depth.
-3. Run assess with strobealign, bwa-mem2 and bowtie2.
-4. Score each aligner on:
-   - junction reads per breakpoint against the expected λ (sensitivity);
-   - junction reads assigned to the wrong strain (false junctions);
-   - empty-site evidence;
-   - runtime and memory.
+1. Families from real catalogue contigs: a recipient backbone with a 5 kb cassette inserted
+   (`F_R`), a donor carrying the same cassette (`F_D`) and, for sister families, the recipient
+   backbone at 98.5% ANI without the cassette (`F_S`). Features are written from the known
+   coordinates, so detection is not part of the test. `--background-mb` adds unused catalogue
+   contigs as decoys.
+2. Family states: carrier, empty, mixed (50% carriers), sister_carrier, sister_empty.
+3. One sample per sample ANI (99.0, 99.5, 99.8, 100% to the catalogue, substitutions plus small
+   indels; the cassette stays identical) and depth (2, 5, 10, 30×); 150 bp pairs with wgsim.
+4. Map with strobealign, bwa-mem2, bowtie2 (end-to-end) and bowtie2 `--local`. Run
+   `count_features.py` at junction MAPQ 0, 1, 5, 10 and 20.
+5. Score each recipient segment as `detect_state.py` would (present / absent / undetermined,
+   k = 2, alpha = 0.05) against the truth, plus:
+   - spanning reads against the expected λ = c(L − 2a)/L (sensitivity);
+   - junction reads on segments that should not be present (false junctions);
+   - flank depth on sister_carrier against the true depth (reads lost to the sister contig);
+   - empty-site templates against the non-carrier depth;
+   - index and mapping time and peak memory.
 
-The choice of `junction_min_mapq` (currently 1) is part of this. Strobealign gives junction
-reads with 50 bp of own flank a MAPQ of about 15, so a MAPQ ≥ 20 filter would discard most
-correct junction reads.
+```bash
+conda env create -f tools/aligner_benchmark.yaml
+CATALOGUE=/projects/MA/HGT/<catalogue>.fa OUTDIR=/projects/MA/HGT/bench \
+    sbatch slurm/aligner_benchmark.sbatch
+```
+
+Results are written to `$OUTDIR/results/`: `summary.tsv`, `segments.tsv` and `resources.tsv`.
+The job log ends with one table per MAPQ. Rerunning skips finished steps. Local smoke test
+(random sequence, about 2 min):
+
+```bash
+python tools/aligner_benchmark.py --outdir .tests/bench --synthetic --families-per-state 2 \
+    --backbone-len 20000 --anis 99.5,100 --depths 5,20 --threads 2
+```
+
+On the smoke test, all four aligners call every segment correctly, apart from empty families
+at 5×, which are below the detection limit. On the sister_carrier families, though, bowtie2
+puts only 0.2–0.4 of the true flank depth on the recipient at MAPQ ≥ 20 (bwa-mem2 1.0,
+strobealign 0.9). The real-contig run will show whether that holds.
 
 ## Tier 4: real subset (HPC)
 
