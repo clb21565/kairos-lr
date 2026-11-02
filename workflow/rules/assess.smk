@@ -28,12 +28,40 @@ def aligner_index(wc):
     return f"{DET}.fa.r{ASSESS['short_read_length']}.sti"
 
 
+# Memory scales with catalogue size. Measured peaks (40 Mbp test catalogue):
+# strobealign index ~4.2 B/bp, minimap2 map-ont index ~8 B/bp; bwa-mem2 index
+# build is documented at ~28 B/bp. Requests below are about 2x those peaks, plus
+# a fixed allowance for samtools sort (SORT_THREADS x SORT_MEM).
+SORT_THREADS = 4
+SORT_MEM_MB = int(config["sort_mem_mb"])   # per sort thread
+
+def _cat_mb(input):
+    import os
+    return os.path.getsize(input.ref if hasattr(input, "ref") else input[0]) / 1e6
+
+def _mem(bytes_per_bp, extra_mb=0):
+    def f(wc, input, attempt):
+        return int(max(16000, bytes_per_bp * _cat_mb(input) + extra_mb) * attempt)
+    return f
+
+def align_mem(wc, input, attempt):
+    if read_type(wc) not in SHORT_TYPES:
+        bpb = 16                         # minimap2 index + mapping buffers
+    elif ASSESS["short_aligner"] == "bwa-mem2":
+        bpb = 12
+    else:
+        bpb = 9
+    return _mem(bpb, SORT_THREADS * SORT_MEM_MB + 4000)(wc, input, attempt)
+
+
 rule index_strobealign:
     input:
         f"{DET}.fa"
     output:
         f"{DET}.fa.r{{rl}}.sti"
     threads: THREADS
+    resources:
+        mem_mb=_mem(9)
     conda:
         "../envs/align.yaml"
     shell:
@@ -45,6 +73,8 @@ rule index_bwamem2:
         f"{DET}.fa"
     output:
         f"{DET}.fa.bwt.2bit.64"
+    resources:
+        mem_mb=_mem(56)
     conda:
         "../envs/align.yaml"
     shell:
@@ -72,13 +102,16 @@ rule align:
         bam=f"{ASM}/{{sample}}/{{sample}}.bam",
         bai=f"{ASM}/{{sample}}/{{sample}}.bam.bai"
     params:
-        cmd=lambda wc, input, threads: align_command(wc, input, threads)
+        cmd=lambda wc, input, threads: align_command(wc, input, threads),
+        sort_threads=lambda wc, threads: min(threads, SORT_THREADS)
     threads: THREADS
+    resources:
+        mem_mb=align_mem
     conda:
         "../envs/align.yaml"
     shell:
         """
-        {params.cmd} | samtools sort -@ {threads} -o {output.bam} -
+        {params.cmd} | samtools sort -@ {params.sort_threads} -m {SORT_MEM_MB}M -T {output.bam}.tmp -o {output.bam} -
         samtools index {output.bam}
         """
 

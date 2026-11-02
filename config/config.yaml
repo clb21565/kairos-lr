@@ -43,6 +43,7 @@ card: /home/bio.aau.dk/se70ol/databases/card/protein_fasta_protein_homolog_model
 
 # ── General parameters ───────────────────────────────────────────────────────
 threads: 4
+sort_mem_mb: 1024   # samtools sort memory per thread in align (up to 4 sort threads)
 
 
 # ── ORF clustering (mmseqs easy-cluster) ────────────────────────────────────

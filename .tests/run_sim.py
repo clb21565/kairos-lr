@@ -31,7 +31,7 @@ def run(outdir, use_conda, short_aligner, extra):
            "--configfile", os.path.join(REPO, "config", "config.yaml"),
            os.path.join(outdir, "sim_config.yaml"),
            "--config", "catalogue=catalogue.fa", "samples=samples.tsv", "gtdb_db=gtdb",
-           "ripdb=", "card=", "threads=2", "cluster_method=easy-linclust",
+           "ripdb=", "card=", "threads=2", "cluster_method=easy-linclust", "sort_mem_mb=128",
            "-c", "2", "--quiet", "all", *extra]
     if use_conda:
         cmd.append("--use-conda")

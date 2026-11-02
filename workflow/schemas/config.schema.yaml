@@ -11,6 +11,7 @@ properties:
   card:            {type: [string, "null"], default: ""}
   scripts_dir:     {type: string}
   threads:         {type: integer, minimum: 1, default: 4}
+  sort_mem_mb:     {type: integer, minimum: 64, default: 1024}   # samtools sort -m per thread (align rule)
   min_seq_id:      {type: number, minimum: 0, maximum: 1, default: 0.99}
   min_cov:         {type: number, minimum: 0, maximum: 1, default: 0.8}
   cluster_method:  {type: string, enum: [easy-cluster, easy-linclust], default: easy-cluster}
