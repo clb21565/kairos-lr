@@ -168,3 +168,39 @@ The influent/effluent year:
    They can't match exactly, because the old method used salmon on edge windows and
    contig-level presence. Use `--contig-map` if the catalogue renamed contigs.
 4. If the reasons make sense, run the whole year.
+
+## Long-read SV comparison (optional, Sniffles2)
+
+kairos only sees an event when the catalogue holds both a carrier and a related contig. Long
+reads can show insertions and deletions in catalogue contigs that kairos does not model.
+`tools/sv_compare.py` runs on Sniffles2 calls against the assess BAMs and sorts each SV into:
+
+- matches a kairos empty site or breakpoint;
+- a novel insertion of a known kairos segment (a known mobile segment at a new site);
+- novel catalogue sequence;
+- no hit.
+
+Many well-supported novel insertions would mean an SV evidence track is worth adding; mostly
+matches means it is an independent check of the empty-site counts.
+
+Local check (after `run_sim.py`). It adds a sample where host4 carries the cassette in 60% of
+cells:
+
+```bash
+MAMBA_ROOT_PREFIX=~/.local/micromamba/root ~/.local/micromamba/bin/micromamba run -n ksv \
+    python .tests/run_sv_sim.py
+```
+
+On the HPC, from the run directory after assess:
+
+```bash
+conda env create -f $REPO/tools/sv_compare.yaml
+REPO=/path/to/kairos-lr SAMPLES=samples.tsv sbatch $REPO/slurm/sv_compare.sbatch
+```
+
+Notes:
+- Sniffles2 skips contigs shorter than 1 Mb unless `--all-contigs` is given; the sbatch sets it.
+- `--mosaic --mosaic-include-germline` keeps low-frequency SVs as well as fixed ones.
+- Use `vaf_recount` (alt/ref reads recounted from the BAM), not the Sniffles2 FORMAT DR/DV. In
+  the simulation, a 3.8 kb insertion in 60% of reads was written as DV=28, DR=0 (VAF 1.0); the
+  recount gives 0.59. For deletions both agree with the kairos empty/spanning counts.
