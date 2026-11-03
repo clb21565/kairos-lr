@@ -32,6 +32,8 @@ def aligner_index(wc):
 # strobealign index ~4.2 B/bp, minimap2 map-ont index ~8 B/bp; bwa-mem2 index
 # build is documented at ~28 B/bp. Requests below are about 2x those peaks, plus
 # a fixed allowance for samtools sort (SORT_THREADS x SORT_MEM).
+# Real 4.4 Gbp catalogue (2026-11-02): strobealign index 6.2 B/bp; strobealign and
+# minimap2 align jobs peaked at their 9 and 16 B/bp requests, so align has more headroom.
 SORT_THREADS = 4
 SORT_MEM_MB = int(config["sort_mem_mb"])   # per sort thread
 
@@ -46,11 +48,11 @@ def _mem(bytes_per_bp, extra_mb=0):
 
 def align_mem(wc, input, attempt):
     if read_type(wc) not in SHORT_TYPES:
-        bpb = 16                         # minimap2 index + mapping buffers
+        bpb = 20                         # minimap2 index + mapping buffers
     elif ASSESS["short_aligner"] == "bwa-mem2":
         bpb = 12
     else:
-        bpb = 9
+        bpb = 12
     return _mem(bpb, SORT_THREADS * SORT_MEM_MB + 4000)(wc, input, attempt)
 
 

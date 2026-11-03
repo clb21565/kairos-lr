@@ -23,6 +23,9 @@ rule taxonomy_contigs:
         "../envs/mmseqs.yaml"
     shell:
         """
+        # clear databases left by an earlier run; mmseqs will not overwrite them
+        rm -rf {params.tmp} {params.outname}.contigs {params.outname}.contigs.* {params.outname}.contigs_h*
+        rm -f {params.outname}.assignments {params.outname}.assignments.*
         mmseqs createdb {input} {params.outname}.contigs
         mmseqs taxonomy {params.outname}.contigs {params.database} {params.outname}.assignments {params.tmp} {MMSEQS_TAXONOMY_OPTS} --threads {threads}
         mmseqs createtsv {params.outname}.contigs {params.outname}.assignments {output}
@@ -44,6 +47,9 @@ rule taxonomy_regions:
         "../envs/mmseqs.yaml"
     shell:
         """
+        # clear databases left by an earlier run; mmseqs will not overwrite them
+        rm -rf {params.tmp} {params.outname}.regions {params.outname}.regions.* {params.outname}.regions_h*
+        rm -f {params.outname}.regions.assignments {params.outname}.regions.assignments.*
         mmseqs createdb {input} {params.outname}.regions
         mmseqs taxonomy {params.outname}.regions {params.database} {params.outname}.regions.assignments {params.tmp} {MMSEQS_TAXONOMY_OPTS} --threads {threads}
         mmseqs createtsv {params.outname}.regions {params.outname}.regions.assignments {output}
