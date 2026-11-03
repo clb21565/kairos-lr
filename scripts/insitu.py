@@ -151,9 +151,11 @@ def call_group(g, st, ev, observed, prior, seg_contig):
             prev = grp.states_at(rec, tp, prior)
             prev_state = ("absent" if "absent" in prev else
                           "undetermined" if prev else "not_observed")
-            prev_empty = sum(grp.row.loc[(rec, tp, ff), "empty"] for ff in prior
-                             if (rec, tp, ff) in grp.state and
-                             pd.notna(grp.row.loc[(rec, tp, ff), "empty"]))
+            # NA when the segment has no empty site (nothing to count), not 0
+            prev_vals = [grp.row.loc[(rec, tp, ff), "empty"] for ff in prior
+                         if (rec, tp, ff) in grp.state and
+                         pd.notna(grp.row.loc[(rec, tp, ff), "empty"])]
+            prev_empty = sum(prev_vals) if prev_vals else None
             tier = "A" if prev_state == "absent" else "B"
 
             later = [tt for tt in grp.times if tt > t]
@@ -217,8 +219,13 @@ def main(argv=None):
     if args.contig_taxonomy:
         lin = read_lineages(args.contig_taxonomy)
         empty = [""] * len(RANKS)
-        out["recipient_lineage"] = [";".join(lin.get(c, empty)) for c in out["recipient_contig"]]
-        out["donor_lineage"] = [";".join(lin.get(c, empty)) for c in out["donor_contig"]]
+
+        def fmt(c):
+            # unclassified contigs get an empty field, not ";;;;;;"
+            parts = lin.get(c, empty)
+            return ";".join(parts) if any(parts) else ""
+        out["recipient_lineage"] = [fmt(c) for c in out["recipient_contig"]]
+        out["donor_lineage"] = [fmt(c) for c in out["donor_contig"]]
         out["discordant_rank"] = [discordant_rank(lin.get(a, empty), lin.get(b, empty))
                                   for a, b in zip(out["recipient_contig"], out["donor_contig"])]
 
