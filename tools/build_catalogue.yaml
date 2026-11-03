@@ -1,0 +1,11 @@
+# conda env for tools/build_catalogue.sh and tools/derep_sensitivity.py
+#   conda env create -f tools/build_catalogue.yaml
+name: kairos-catalogue
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.12
+  - seqkit=2.8
+  - mmseqs2>=15

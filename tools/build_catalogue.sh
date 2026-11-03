@@ -9,18 +9,23 @@
 # Contigs are renamed <assembly file name>__<contig id>, because assemblers reuse names
 # (NODE_1_..., contig_1) across samples.
 #
-# Clustering keeps near-identical sisters apart: two contigs only merge if they are >= 99%
-# identical over >= 95% of BOTH sequences (--cov-mode 0). So a contig with an insert and its
-# sister without it stay separate, which kairos needs to find the event.
+# Two contigs merge if they are >= 99% identical over >= 95% of BOTH sequences (--cov-mode 0).
+# A contig with an insert and its sister without it are only merged when the insert sits near a
+# contig end and is small (insert <~ 5% of the contig); an insert of >= 100 bp inside a contig
+# is never aligned across, so the sisters stay separate at any setting
+# (tools/derep_sensitivity.py). kairos does not need the empty sister: build_features makes the
+# empty site from the carrier, and a sister sharing its flanks lowers flank MAPQ.
 #
 # Staged use for many assemblies: run once per site (or month), then list the per-site
 # catalogue.fa files in a new assemblies.txt and run again to merge.
+#
+# MIN_ID, MIN_COV and COV_MODE (env) override 0.99, 0.95 and 0.
 #
 # Needs seqkit and mmseqs on PATH (e.g. the workflow/envs/mmseqs.yaml + orfs.yaml envs).
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-    sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 
@@ -30,6 +35,7 @@ min_len=${3:-1000}
 threads=${4:-8}
 min_id=${MIN_ID:-0.99}
 min_cov=${MIN_COV:-0.95}
+cov_mode=${COV_MODE:-0}
 
 mkdir -p "$out"
 
@@ -47,7 +53,7 @@ seqkit stats -T "$out/contigs.fa" >&2
 
 # 2. cluster
 mmseqs easy-linclust "$out/contigs.fa" "$out/clu" "$out/tmp" \
-    --min-seq-id "$min_id" -c "$min_cov" --cov-mode 0 \
+    --min-seq-id "$min_id" -c "$min_cov" --cov-mode "$cov_mode" \
     --threads "$threads" -v 1
 
 seqkit seq -i "$out/clu_rep_seq.fasta" > "$out/catalogue.fa"
