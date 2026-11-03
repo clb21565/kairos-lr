@@ -44,8 +44,8 @@ rule insitu:
     output:
         f"{CALLDIR}/insitu_events.tsv"
     params:
-        observed=",".join(CALL["observed_fractions"]),
-        prior=",".join(CALL["prior_fractions"]),
+        observed=",".join(CALL["observed_compartments"]),
+        prior=",".join(CALL["prior_compartments"]),
         taxonomy=lambda wc, input: f"--contig-taxonomy {input.taxonomy[0]}" if input.taxonomy else ""
     conda:
         "../envs/python.yaml"

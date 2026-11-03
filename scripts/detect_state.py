@@ -3,7 +3,7 @@
 kairos detect-state | present / absent / undetermined for every shared segment in every observation
 
 A segment is one contig's copy of a shared region (one side of an event in events.tsv), with up
-to two breakpoints. An observation is one (group, timepoint, fraction) in the sample sheet; the
+to two breakpoints. An observation is one (group, timepoint, compartment) in the sample sheet; the
 samples in it (e.g. short and long reads of the same sample) are pooled.
 
 For each observation and segment:
@@ -31,7 +31,7 @@ import sys
 
 import pandas as pd
 
-OBS = ["group", "timepoint", "fraction"]
+OBS = ["group", "timepoint", "compartment"]
 
 
 def parse_args(argv=None):

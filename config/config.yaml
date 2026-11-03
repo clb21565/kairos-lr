@@ -97,13 +97,13 @@ assess:
 
 
 # ── Call: detection states and in situ events ───────────────────────────────
-# Samples with the same group, timepoint and fraction are pooled into one observation.
+# Samples with the same group, timepoint and compartment are pooled into one observation.
 call:
   min_reads: 2              # junction reads to call a segment present (k)
   alpha: 0.05               # absent if P(fewer than k reads | carried) <= alpha
   absent_fraction: 1.0      # carrier fraction an absent call rules out (1.0 = whole host population)
-  observed_fractions: []    # fractions where recipients are looked for (empty = all), e.g. [INF]
-  prior_fractions: []       # fractions that count as having seen a contig (empty = all), e.g. [INF, EFF]
+  observed_compartments: []    # compartments where recipients are looked for (empty = all), e.g. [INF]
+  prior_compartments: []       # compartments that count as having seen a contig (empty = all), e.g. [INF, EFF]
   use_taxonomy: true        # add contig lineages and the discordant rank to in situ events (needs GTDB)
 
 

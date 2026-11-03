@@ -6,7 +6,7 @@ Hosts carry their own genes; a ~4 kb gene cassette is shared by host1, host2 and
 (host3 in reverse orientation). host1 also exists without the cassette ("host1_empty"),
 which is the pre-transfer state. The catalogue holds host1-3 with the cassette plus host4.
 
-Samples (group G, fraction X):
+Samples (group G, compartment X):
   t1_short / t1_long   host1_empty 20x, host2 20x, host4 10x  -> cassette absent from host1
   t2_short / t2_long   host1 10x + host1_empty 10x, host2 20x  -> host1 gains it (50% carriers)
   t3_short             host1 3x, host2 20x                     -> host1 too shallow to call
@@ -122,7 +122,7 @@ def main():
         ("t2_long", "ont", 2, {"asm1_host1": 10, "asm1_host1_empty": 10, "asm2_host2": 20}),
         ("t3_short", "short_pe", 3, {"asm1_host1": 3, "asm2_host2": 20}),
     ]
-    rows = ["sample\treads\tread_type\ttimepoint\tgroup\tfraction"]
+    rows = ["sample\treads\tread_type\ttimepoint\tgroup\tcompartment"]
     truth = ["sample\tgenome\tdepth"]
     for k, (name, rt, t, depths) in enumerate(samples):
         prefix = os.path.join(args.outdir, "reads", name)

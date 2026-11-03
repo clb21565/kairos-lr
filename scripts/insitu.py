@@ -7,20 +7,20 @@ detect_state.py. For each event (two contigs sharing a segment), each contig is 
 recipient. Within a group, at timepoint t:
 
   1. Recipient new: its segment is present in an observed fraction f at t, was not present in any
-     prior fraction at an earlier timepoint, and is not present at t in any other prior fraction
+     prior compartment at an earlier timepoint, and is not present at t in any other prior compartment
      (<=: rules out same-day import, e.g. influent -> effluent). t must have an earlier
      observation (nothing is "new" at the first timepoint).
-  2. Donor first: the other contig's segment was present in a prior fraction at an earlier
+  2. Donor first: the other contig's segment was present in a prior compartment at an earlier
      timepoint (<: this is what gives the direction). If instead it also first appears at t,
      the event is kept with direction "unresolved".
   3. Tier: A if, at the previous timepoint, the recipient's segment was confidently absent
-     (detect_state "absent") in a prior fraction; B if it was only undetermined (could be
+     (detect_state "absent") in a prior compartment; B if it was only undetermined (could be
      immigration or below detection) or not observed there.
-  4. Persistence: whether the segment is still present in an observed fraction at the next
+  4. Persistence: whether the segment is still present in an observed compartment at the next
      timepoint (yes / no / undetermined / NA).
 
 Timepoints are ordered numerically if they are all numbers, else as dates if they all parse,
-else as text. Observed and prior fractions come from --observed / --prior (default: all).
+else as text. Observed and prior compartments come from --observed / --prior (default: all).
 """
 
 import argparse
@@ -39,9 +39,9 @@ def parse_args(argv=None):
     parser.add_argument("--segments", required=True, help="segments.tsv from detect_state.py")
     parser.add_argument("--event-segments", required=True, help="event_segments.tsv from detect_state.py")
     parser.add_argument("--observed", default="",
-                        help="comma-separated fractions in which recipients are looked for (default: all)")
+                        help="comma-separated compartments in which recipients are looked for (default: all)")
     parser.add_argument("--prior", default="",
-                        help="comma-separated fractions that count as having seen a contig (default: all)")
+                        help="comma-separated compartments that count as having seen a contig (default: all)")
     parser.add_argument("--contig-taxonomy", default="",
                         help="mmseqs taxonomy TSV for the catalogue contigs (assignRes2.tsv), optional")
     parser.add_argument("--out", required=True, help="insitu_events.tsv")
@@ -87,39 +87,39 @@ class Group:
     def __init__(self, st, observed, prior):
         self.observed, self.prior = observed, prior
         self.times = sorted(st["t"].unique())
-        self.prior_times = sorted(st.loc[st["fraction"].isin(prior), "t"].unique())
-        idx = st.set_index(["segment_id", "t", "fraction"])
+        self.prior_times = sorted(st.loc[st["compartment"].isin(prior), "t"].unique())
+        idx = st.set_index(["segment_id", "t", "compartment"])
         self.state = idx["state"].to_dict()
         self.row = idx
         present = st[st["state"] == "present"]
         self.present = present.groupby("segment_id").apply(
-            lambda d: list(zip(d["t"], d["fraction"])), include_groups=False).to_dict()
+            lambda d: list(zip(d["t"], d["compartment"])), include_groups=False).to_dict()
 
-    def present_at(self, seg, t=None, before=None, fractions=None):
+    def present_at(self, seg, t=None, before=None, compartments=None):
         hits = self.present.get(seg, [])
         return [(tt, f) for tt, f in hits
                 if (t is None or tt == t) and (before is None or tt < before)
-                and (fractions is None or f in fractions)]
+                and (compartments is None or f in compartments)]
 
     def recipient_new(self, seg):
-        """(t, fraction) at which seg first appears as a recipient, or None."""
-        hits = self.present_at(seg, fractions=self.observed | self.prior)
+        """(t, compartment) at which seg first appears as a recipient, or None."""
+        hits = self.present_at(seg, compartments=self.observed | self.prior)
         if not hits:
             return None
         t = min(tt for tt, _ in hits)
         if not self.prior_times or t <= self.prior_times[0]:
             return None      # no earlier observation to compare with
-        if self.present_at(seg, before=t, fractions=self.prior):
+        if self.present_at(seg, before=t, compartments=self.prior):
             return None
         for f in sorted(self.observed):
             if (t, f) in hits:
-                others = [ff for _, ff in self.present_at(seg, t=t, fractions=self.prior) if ff != f]
+                others = [ff for _, ff in self.present_at(seg, t=t, compartments=self.prior) if ff != f]
                 if not others:
                     return t, f
         return None
 
-    def states_at(self, seg, t, fractions):
-        return [self.state.get((seg, t, f)) for f in fractions if (seg, t, f) in self.state]
+    def states_at(self, seg, t, compartments):
+        return [self.state.get((seg, t, f)) for f in compartments if (seg, t, f) in self.state]
 
 
 def call_group(g, st, ev, observed, prior, seg_contig):
@@ -131,7 +131,7 @@ def call_group(g, st, ev, observed, prior, seg_contig):
             if new is None:
                 continue
             t, f = new
-            donor_before = grp.present_at(don, before=t, fractions=prior)
+            donor_before = grp.present_at(don, before=t, compartments=prior)
             if donor_before:
                 direction = "directed"
                 t_d = max(tt for tt, _ in donor_before)
@@ -169,13 +169,13 @@ def call_group(g, st, ev, observed, prior, seg_contig):
             r = grp.row.loc[(rec, t, f)]
             rows[key] = {
                 "group": g, "t": t, "event_id": e.event_id, "direction": direction, "tier": tier,
-                "recipient_contig": seg_contig[rec], "recipient_segment": rec, "recipient_fraction": f,
+                "recipient_contig": seg_contig[rec], "recipient_segment": rec, "recipient_compartment": f,
                 "recipient_reads": int(r["n"]),
                 "recipient_carrier_frac_depth": r["carrier_frac_depth"],
                 "recipient_carrier_frac_empty": r["carrier_frac_empty"],
                 "prev_t": tp, "prev_state": prev_state, "prev_empty_reads": prev_empty,
                 "donor_contig": seg_contig[don], "donor_segment": don,
-                "donor_last_t": donor_last[0], "donor_last_fraction": donor_last[1],
+                "donor_last_t": donor_last[0], "donor_last_compartment": donor_last[1],
                 "persistence": persistence,
             }
     return list(rows.values())
@@ -183,19 +183,19 @@ def call_group(g, st, ev, observed, prior, seg_contig):
 
 def main(argv=None):
     args = parse_args(argv)
-    st = pd.read_csv(args.states, sep="\t", dtype={"group": str, "timepoint": str, "fraction": str},
+    st = pd.read_csv(args.states, sep="\t", dtype={"group": str, "timepoint": str, "compartment": str},
                      keep_default_na=False, na_values=[""])
-    st[["group", "fraction"]] = st[["group", "fraction"]].fillna("")
+    st[["group", "compartment"]] = st[["group", "compartment"]].fillna("")
     seg = pd.read_csv(args.segments, sep="\t", keep_default_na=False)
     seg_contig = dict(zip(seg["segment_id"], seg["contig"]))
     ev = pd.read_csv(args.event_segments, sep="\t")
 
-    fractions = set(st["fraction"])
-    observed = set(args.observed.split(",")) - {""} or fractions
-    prior = set(args.prior.split(",")) - {""} or fractions
+    compartments = set(st["compartment"])
+    observed = set(args.observed.split(",")) - {""} or compartments
+    prior = set(args.prior.split(",")) - {""} or compartments
     for name, fs in (("--observed", observed), ("--prior", prior)):
-        if fs - fractions:
-            sys.exit(f"{name}: fractions not in the sample sheet: {', '.join(sorted(fs - fractions))}")
+        if fs - compartments:
+            sys.exit(f"{name}: compartments not in the sample sheet: {', '.join(sorted(fs - compartments))}")
 
     rows = []
     for g, gst in st.groupby("group"):
@@ -209,10 +209,10 @@ def main(argv=None):
             rows.append(r)
 
     cols = ["group", "timepoint", "event_id", "direction", "tier",
-            "recipient_contig", "recipient_segment", "recipient_fraction", "recipient_reads",
+            "recipient_contig", "recipient_segment", "recipient_compartment", "recipient_reads",
             "recipient_carrier_frac_depth", "recipient_carrier_frac_empty",
             "prev_timepoint", "prev_state", "prev_empty_reads",
-            "donor_contig", "donor_segment", "donor_last_timepoint", "donor_last_fraction",
+            "donor_contig", "donor_segment", "donor_last_timepoint", "donor_last_compartment",
             "persistence"]
     out = pd.DataFrame(rows, columns=cols)
 

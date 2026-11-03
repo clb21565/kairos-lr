@@ -23,7 +23,7 @@ The workflow has three stages; each can be run on its own (`snakemake detect | a
    - **Flank depth:** the read depth next to each breakpoint; it sets the detection limit.
    - **Empty-site evidence:** split or deletion reads, long-insert read pairs, and short reads realigned in a second pass.
 3. **Call** (all samples):
-   - **States:** samples sharing a group, timepoint and fraction are pooled into one observation. Each segment in each observation is called present, absent or undetermined, using a Poisson detection limit.
+   - **States:** samples sharing a group, timepoint and compartment are pooled into one observation. Each segment in each observation is called present, absent or undetermined, using a Poisson detection limit.
    - **In situ events:** a recipient whose segment appears at time *t* after being absent, with a donor that carried it earlier. Each event gets an evidence tier, a direction and a persistence flag.
 
 The design (feature definitions, detection limit, in situ rules) is described in `docs/` and in the docstrings of each script in `scripts/`.
@@ -40,9 +40,9 @@ For each pair/region, the pipeline records the most inclusive taxonomic rank at 
 Within a group, at timepoint *t* (`scripts/insitu.py`):
 
 - **Recipient new:**
-  - its segment is present in an observed fraction at *t*;
-  - it was not present in any prior fraction at an earlier timepoint;
-  - it is not present in another fraction at *t*, which rules out same-day import (e.g. influent → effluent).
+  - its segment is present in an observed compartment at *t*;
+  - it was not present in any prior compartment at an earlier timepoint;
+  - it is not present in another compartment at *t*, which rules out same-day import (e.g. influent → effluent).
 - **Donor first:** the other contig's segment was present at an earlier timepoint; this is what gives the direction. If both appear at *t*, the event is reported with direction `unresolved`.
 - **Tier:** `A` if the recipient's segment was confidently absent at the previous timepoint; `B` if that was undetermined (immigration or below detection).
 - **Persistence:** whether the segment is still present at the next timepoint.
@@ -73,10 +73,10 @@ Each rule's tools come from its own conda env in `workflow/envs/`, created on fi
    | `read_type` | assess | `short_pe`, `short_se`, `ont`, `hifi` | picks the aligner and the detection model |
    | `timepoint` | in situ | `2020-08-04` or `12` | only the order matters (numbers, dates or text) |
    | `group` | in situ | `CB` | in situ calls compare samples within one group (e.g. site) |
-   | `fraction` | in situ | `INF`, `EFF` | free text; config says which fractions are observed / prior |
+   | `compartment` | in situ | `INF`, `EFF` | free text; config says which compartments are observed / prior |
    | `assembly` | optional | `CB_0804_INF` | provenance only |
 
-   A sample sequenced with both short and long reads gets two rows (different `sample` IDs, same group, timepoint and fraction). The rows are pooled in the call stage.
+   A sample sequenced with both short and long reads gets two rows (different `sample` IDs, same group, timepoint and compartment). The rows are pooled in the call stage.
 
 ## Configuration
 
@@ -91,7 +91,7 @@ Edit `config/config.yaml`. The essentials:
 | `assess.short_aligner` | `strobealign` (default) or `bwa-mem2` |
 | `assess.short_read_length` | read length the strobealign index is built for |
 | `assess.long_read_presets` | minimap2 preset per long `read_type` (`map-ont`, `map-hifi`, `lr:hq`) |
-| `call.observed_fractions` / `call.prior_fractions` | where recipients are looked for / what counts as seen before (empty = all fractions) |
+| `call.observed_compartments` / `call.prior_compartments` | where recipients are looked for / what counts as seen before (empty = all compartments) |
 | `call.min_reads`, `call.alpha`, `call.absent_fraction` | detection limit: present with ≥ *k* junction reads; absent when P(< *k* reads \| carried) ≤ α |
 
 Every key is documented in the file and validated against `workflow/schemas/`.

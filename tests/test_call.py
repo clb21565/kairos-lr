@@ -37,11 +37,11 @@ EVENTS = pd.DataFrame({"event_id": ["EV1"], "segment_1": ["SR"], "segment_2": ["
 
 
 def states(rows):
-    """rows: (timepoint, fraction, segment, state[, empty])"""
+    """rows: (timepoint, compartment, segment, state[, empty])"""
     out = []
     for r in rows:
         t, f, seg, state = r[:4]
-        out.append({"group": "G", "timepoint": str(t), "fraction": f, "segment_id": seg,
+        out.append({"group": "G", "timepoint": str(t), "compartment": f, "segment_id": seg,
                     "state": state, "n": 5 if state == "present" else 0, "n_span": 0, "lam": 10,
                     "p_miss": 0, "empty": r[4] if len(r) > 4 else float("nan"), "flank_depth": 10,
                     "carrier_frac_depth": 0.5, "carrier_frac_empty": "", "n_breakpoints": 2})
@@ -114,17 +114,17 @@ def test_same_day_import_excluded(tmp_path):
     rows[-2] = (2, "EFF", "SR", "present")
     rows[-3] = (2, "INF", "SR", "absent")
     out = run_insitu(tmp_path, states(rows), observed="EFF")
-    assert len(out) == 1 and out.iloc[0].recipient_fraction == "EFF"
+    assert len(out) == 1 and out.iloc[0].recipient_compartment == "EFF"
 
 
-def test_donor_seen_only_in_prior_fraction(tmp_path):
+def test_donor_seen_only_in_prior_compartment(tmp_path):
     # old CIWARS setup: recipients in INF, prior = INF + EFF; donor seen only in EFF earlier
     out = run_insitu(tmp_path, states([
         (1, "EFF", "SD", "present"), (1, "INF", "SD", "absent"),
         (1, "INF", "SR", "absent"), (1, "EFF", "SR", "absent"),
         (2, "INF", "SR", "present"), (2, "EFF", "SR", "absent"),
     ]), observed="INF", prior="INF,EFF")
-    assert len(out) == 1 and out.iloc[0].donor_last_fraction == "EFF"
+    assert len(out) == 1 and out.iloc[0].donor_last_compartment == "EFF"
 
 
 def test_dates_ordered_as_dates(tmp_path):

@@ -9,7 +9,7 @@ contigs (e.g. assembly prefixes), pass --contig-map (TSV: old_contig, new_contig
 
 Each R-only edge gets a reason from the call outputs:
   no_event            the two contigs share no region pair in events.tsv
-  recipient_not_new   the recipient's segment was already present earlier (or in another fraction at t)
+  recipient_not_new   the recipient's segment was already present earlier (or in another compartment at t)
   recipient_not_seen  the recipient's segment is not present at t (undetermined or absent)
   donor_not_before    the donor's segment was not present before t
   other_timepoint     the pair is an event, but called at another timepoint
@@ -112,7 +112,7 @@ def main(argv=None):
             return "recipient_not_new"
         if not any(w < t for w in don_weeks):
             return "donor_not_before"
-        return "recipient_not_new"      # present in another fraction at t (same-day rule)
+        return "recipient_not_new"      # present in another compartment at t (same-day rule)
 
     cmp["reason"] = cmp.apply(reason, axis=1)
     cmp.sort_values(["week", "recipient", "donor"]).to_csv(a.out, sep="\t", index=False)

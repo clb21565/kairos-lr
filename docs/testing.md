@@ -26,8 +26,8 @@ python -m pytest tests/
   - unresolved direction;
   - donor first seen later;
   - recipient already seen;
-  - same-day import between fractions;
-  - observed and prior fractions (the CIWARS setup);
+  - same-day import between compartments;
+  - observed and prior compartments (the CIWARS setup);
   - date ordering;
   - discordant rank.
 
@@ -148,7 +148,7 @@ short-only, long-only and both read types:
 The influent/effluent year:
 
 1. Start small: one site and about 10 consecutive weeks, influent and effluent. Use the
-   CIWARS setup (`call.observed_fractions: [INF]`, `call.prior_fractions: [INF, EFF]`) and
+   CIWARS setup (`call.observed_compartments: [INF]`, `call.prior_compartments: [INF, EFF]`) and
    set `timepoint` in the sample sheet to the R `ordered_week`.
 2. Regenerate the R results for the same weeks with the fixed `get_isHGTs_weekly`
    (`insitu_hgt_weekly.R`).

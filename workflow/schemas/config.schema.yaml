@@ -55,10 +55,10 @@ properties:
       min_reads:          {type: integer, minimum: 1}
       alpha:              {type: number, exclusiveMinimum: 0, maximum: 1}
       absent_fraction:    {type: number, exclusiveMinimum: 0, maximum: 1}
-      observed_fractions: {type: array, items: {type: string}}
-      prior_fractions:    {type: array, items: {type: string}}
+      observed_compartments: {type: array, items: {type: string}}
+      prior_compartments:    {type: array, items: {type: string}}
       use_taxonomy:       {type: boolean}
-    required: [min_reads, alpha, absent_fraction, observed_fractions, prior_fractions, use_taxonomy]
+    required: [min_reads, alpha, absent_fraction, observed_compartments, prior_compartments, use_taxonomy]
   annotation:
     type: object
     additionalProperties:

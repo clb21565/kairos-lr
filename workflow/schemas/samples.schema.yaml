@@ -24,7 +24,7 @@ properties:
   group:
     type: string
     description: in situ calls only compare samples within one group (e.g. site)
-  fraction:
+  compartment:
     type: string
-    description: free text (e.g. INF, EFF); config says which fractions are observed / prior
+    description: free text (e.g. INF, EFF); config says which compartments are observed / prior
 required: [sample, reads, read_type]
