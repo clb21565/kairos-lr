@@ -99,12 +99,19 @@ assess:
 # ── Call: detection states and in situ events ───────────────────────────────
 # Samples with the same group, timepoint and compartment are pooled into one observation.
 call:
-  min_reads: 2              # junction reads to call a segment present (k)
+  min_reads: 2              # junction reads per boundary to call a segment present (k)
+  min_boundaries: 2         # breakpoints a segment needs to be present (2 = internal regions, as in
+                            # kairos criterion 2; contig-end regions are at most "partial")
+  contig_min_breadth: 0.5   # host contig present: breadth of its own sequence (minus all regions) >= this
+  contig_breadth_ratio: 0.5 #   ... and >= this x the breadth expected at its depth, 1 - exp(-depth)
   alpha: 0.05               # absent if P(fewer than k reads | carried) <= alpha
   absent_fraction: 1.0      # carrier fraction an absent call rules out (1.0 = whole host population)
   observed_compartments: []    # compartments where recipients are looked for (empty = all), e.g. [INF]
   prior_compartments: []       # compartments that count as having seen a contig (empty = all), e.g. [INF, EFF]
   use_taxonomy: true        # add contig lineages and the discordant rank to in situ events (needs GTDB)
+  lineage_filter: discordant  # discordant: keep events whose contigs differ at some rank (default);
+                              # not_same: also keep unclassified / unresolved pairs; none: keep all.
+                              # Same-lineage events are never HGT. Needs use_taxonomy unless none.
 
 
 # ── Functional annotation thresholds ────────────────────────────────────────

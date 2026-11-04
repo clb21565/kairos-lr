@@ -23,10 +23,10 @@ The workflow has three stages; each can be run on its own (`snakemake detect | a
    - **Flank depth:** the read depth next to each breakpoint; it sets the detection limit.
    - **Empty-site evidence:** split or deletion reads, long-insert read pairs, and short reads realigned in a second pass.
 3. **Call** (all samples):
-   - **States:** samples sharing a group, timepoint and compartment are pooled into one observation. Each segment in each observation is called present, absent or undetermined, using a Poisson detection limit.
+   - **States:** samples sharing a group, timepoint and compartment are pooled into one observation. Each segment in each observation is called present, partial, absent or undetermined. Present means that both region boundaries have junction reads and the host contig's own sequence is detected. Absent uses a Poisson detection limit.
    - **In situ events:** a recipient whose segment appears at time *t* after being absent, with a donor that carried it earlier. Each event gets an evidence tier, a direction and a persistence flag.
 
-The design (feature definitions, detection limit, in situ rules) is described in `docs/` and in the docstrings of each script in `scripts/`.
+The design (feature definitions, detection limit, in situ rules) is described in `docs/features.md` (every feature file and column) and in the docstrings of each script in `scripts/`.
 
 ### Detection criteria (detect)
 
@@ -39,11 +39,13 @@ For each pair/region, the pipeline records the most inclusive taxonomic rank at 
 
 Within a group, at timepoint *t* (`scripts/insitu.py`):
 
+- **Present** means the full region is seen: every boundary (breakpoint) of the segment has junction reads, and the contig's own sequence (the contig minus its regions) is covered. Contig-end regions with one boundary, or junction reads without the host contig, are `partial`.
 - **Recipient new:**
   - its segment is present in an observed compartment at *t*;
-  - it was not present in any prior compartment at an earlier timepoint;
-  - it is not present in another compartment at *t*, which rules out same-day import (e.g. influent → effluent).
+  - it was not seen (present or partial) in any prior compartment at an earlier timepoint;
+  - it is not seen in another compartment at *t*, which rules out same-day import (e.g. influent → effluent).
 - **Donor first:** the other contig's segment was present at an earlier timepoint; this is what gives the direction. If both appear at *t*, the event is reported with direction `unresolved`.
+- **Lineage:** HGT is between lineages. Events whose recipient and donor contigs have the same lineage are never reported. By default (`call.lineage_filter: discordant`), the lineages must also be known to differ at some rank. Removed events go to `insitu_excluded.tsv`.
 - **Tier:** `A` if the recipient's segment was confidently absent at the previous timepoint; `B` if that was undetermined (immigration or below detection).
 - **Persistence:** whether the segment is still present at the next timepoint.
 
@@ -92,7 +94,9 @@ Edit `config/config.yaml`. The essentials:
 | `assess.short_read_length` | read length the strobealign index is built for |
 | `assess.long_read_presets` | minimap2 preset per long `read_type` (`map-ont`, `map-hifi`, `lr:hq`) |
 | `call.observed_compartments` / `call.prior_compartments` | where recipients are looked for / what counts as seen before (empty = all compartments) |
-| `call.min_reads`, `call.alpha`, `call.absent_fraction` | detection limit: present with ≥ *k* junction reads; absent when P(< *k* reads \| carried) ≤ α |
+| `call.min_reads`, `call.alpha`, `call.absent_fraction` | detection limit: ≥ *k* junction reads per boundary; absent when P(< *k* reads \| carried) ≤ α |
+| `call.min_boundaries`, `call.contig_min_breadth`, `call.contig_breadth_ratio` | present needs this many boundaries (2 = internal regions) and the host contig's own sequence covered |
+| `call.lineage_filter` | `discordant` (default), `not_same` or `none`: which events to keep by recipient/donor lineage |
 
 Every key is documented in the file and validated against `workflow/schemas/`.
 
@@ -122,14 +126,16 @@ Any config key can be overridden on the command line, e.g. `--config catalogue=c
 | `results/detect/<name>.hgt/` | HGT tables per rank and criterion, groups, group report, donor–recipient pairs |
 | `results/detect/<name>-{card,mobileog,ripdb}.tsv` | annotations |
 | `results/detect/<name>.features/events.tsv` | one row per region pair: refined shared segment and breakpoints on each contig |
-| `results/detect/<name>.features/breakpoints.tsv`, `flanks.bed`, `empty_sites.tsv`, `junctions.fa` | the features assess counts reads at |
+| `results/detect/<name>.features/breakpoints.tsv`, `flanks.bed`, `empty_sites.tsv`, `junctions.fa`, `contigs.bed` | the features assess counts reads at (see `docs/features.md`) |
 | `results/assess/<sample>/<sample>.bam` | reads mapped to the catalogue |
 | `results/assess/<sample>/<sample>.breakpoint_counts.tsv` | spanning reads, bridging pairs and flank depth per breakpoint |
 | `results/assess/<sample>/<sample>.empty_site_counts.tsv` | empty-site evidence per empty site |
+| `results/assess/<sample>/<sample>.contig_counts.tsv` | depth and breadth of each event contig's own sequence (contig minus its regions) |
 | `results/assess/<sample>/<sample>.coverage.tsv` | contig coverage and breadth (`samtools coverage`) |
-| `results/call/states.tsv` | present / absent / undetermined per observation and segment, with expected reads (λ) and carrier fraction |
+| `results/call/states.tsv` | present / partial / absent / undetermined per observation and segment, with reads per boundary, contig state, expected reads (λ) and carrier fraction |
 | `results/call/segments.tsv`, `event_segments.tsv` | segment definitions and which segments make up each event |
-| `results/call/insitu_events.tsv` | in situ HGT events: recipient, donor, direction, tier, persistence, lineages |
+| `results/call/insitu_events.tsv` | in situ HGT events: recipient, donor, direction, tier, persistence, lineages and their relation |
+| `results/call/insitu_excluded.tsv` | events removed by the lineage filter, with the reason |
 
 ## Testing
 

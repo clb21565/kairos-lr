@@ -18,6 +18,10 @@ Outputs (in --outdir):
                    its read depth sets the detection limit
   empty_sites.tsv  one row per shared segment with both breakpoints: the contig with the segment removed
   junctions.fa     junction windows (BP*) and empty-site sequences (ES*), for the second-pass remapping
+  contigs.bed      every event contig's own sequence: the whole contig minus all of its regions and
+                   shared segments; its depth and breadth say whether the contig itself is present
+
+See docs/features.md for what each file and column means.
 
 All coordinates are 0-based, half-open. A breakpoint at position p lies between bases p-1 and p.
 """
@@ -200,6 +204,21 @@ class FeatureStore:
                 out.write(f">{r['es_id']}\n{seq}\n")
 
 
+def write_contig_own(events, store, path):
+    """BED of each event contig's own sequence: [0, L) minus every region and shared segment on it."""
+    remove = {c: list(iv) for c, iv in store.region_iv.items()}
+    for i in (1, 2):
+        if events.empty:
+            break
+        for c, s, e in zip(events[f"contig_{i}"], events[f"shared_start_{i}"], events[f"shared_end_{i}"]):
+            remove.setdefault(c, []).append((s, e))
+    contigs = sorted(set(events[["contig_1", "contig_2"]].values.ravel())) if len(events) else []
+    with open(path, "w") as out:
+        for c in contigs:
+            for s, e in subtract(0, store.contig_len[c], remove.get(c, [])):
+                out.write(f"{c}\t{s}\t{e}\n")
+
+
 def build_events(pairs, regions, fasta, store, args):
     events = []
     aligner, aligner_region, w1 = None, None, 0
@@ -234,6 +253,7 @@ def build_events(pairs, regions, fasta, store, args):
             "bp_left_2": side2[0], "bp_right_2": side2[1], "empty_site_2": side2[2],
             "strand": strand, "identity": identity, "shared_len": sh1[1] - sh1[0],
             "refined": refined,
+            "region_type_1": g1.get("region_type", ""), "region_type_2": g2.get("region_type", ""),
         })
     return pd.DataFrame(events)
 
@@ -255,9 +275,10 @@ def main(argv=None):
             "event_id", "region_idx_1", "contig_1", "shared_start_1", "shared_end_1",
             "bp_left_1", "bp_right_1", "empty_site_1", "region_idx_2", "contig_2",
             "shared_start_2", "shared_end_2", "bp_left_2", "bp_right_2", "empty_site_2",
-            "strand", "identity", "shared_len", "refined"])
+            "strand", "identity", "shared_len", "refined", "region_type_1", "region_type_2"])
     events.to_csv(os.path.join(args.outdir, "events.tsv"), sep="\t", index=False)
     store.write(args.outdir)
+    write_contig_own(events, store, os.path.join(args.outdir, "contigs.bed"))
 
     n_ref = int(events["refined"].sum()) if len(events) else 0
     print(f"{len(events)} events ({n_ref} refined by alignment), "

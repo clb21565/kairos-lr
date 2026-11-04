@@ -18,7 +18,8 @@ rule build_features:
         breakpoints=f"{DET}.features/breakpoints.tsv",
         flanks=f"{DET}.features/flanks.bed",
         empty_sites=f"{DET}.features/empty_sites.tsv",
-        junctions=f"{DET}.features/junctions.fa"
+        junctions=f"{DET}.features/junctions.fa",
+        contigs=f"{DET}.features/contigs.bed"
     params:
         outdir=f"{DET}.features"
     conda:

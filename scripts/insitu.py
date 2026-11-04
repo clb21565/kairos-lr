@@ -3,21 +3,28 @@
 kairos in situ | HGT events that happened within the sampled system, ordered in time
 
 Port of get_isHGTs_weekly() (CIWARS influent/effluent study) to segment states from
-detect_state.py. For each event (two contigs sharing a segment), each contig is tried as the
+detect_state.py. "Present" is detect_state's strict call: every boundary of the region has
+junction reads and the host contig's own sequence is detected. "Seen" is present or partial
+(some junction reads, but not the full region + contig evidence). For each event (two contigs sharing a segment), each contig is tried as the
 recipient. Within a group, at timepoint t:
 
-  1. Recipient new: its segment is present in an observed fraction f at t, was not present in any
-     prior compartment at an earlier timepoint, and is not present at t in any other prior compartment
+  1. Recipient new: its segment is present in an observed compartment f at t, was not seen in any
+     prior compartment at an earlier timepoint, and is not seen at t in any other prior compartment
      (<=: rules out same-day import, e.g. influent -> effluent). t must have an earlier
      observation (nothing is "new" at the first timepoint).
   2. Donor first: the other contig's segment was present in a prior compartment at an earlier
-     timepoint (<: this is what gives the direction). If instead it also first appears at t,
+     timepoint (<: this is what gives the direction). If instead it is first seen at t,
      the event is kept with direction "unresolved".
   3. Tier: A if, at the previous timepoint, the recipient's segment was confidently absent
      (detect_state "absent") in a prior compartment; B if it was only undetermined (could be
      immigration or below detection) or not observed there.
   4. Persistence: whether the segment is still present in an observed compartment at the next
-     timepoint (yes / no / undetermined / NA).
+     timepoint (yes / partial / no / undetermined / NA).
+  5. Lineage (--contig-taxonomy): HGT is between lineages, so events whose two contigs have the
+     same lineage are never reported. --lineage-filter discordant (default) keeps only events
+     whose contigs are classified and differ at some rank; not_same also keeps events whose
+     lineages cannot be compared (unclassified, or identical as far as both go); none keeps all.
+     Removed events go to --excluded with the reason.
 
 Timepoints are ordered numerically if they are all numbers, else as dates if they all parse,
 else as text. Observed and prior compartments come from --observed / --prior (default: all).
@@ -44,7 +51,10 @@ def parse_args(argv=None):
                         help="comma-separated compartments that count as having seen a contig (default: all)")
     parser.add_argument("--contig-taxonomy", default="",
                         help="mmseqs taxonomy TSV for the catalogue contigs (assignRes2.tsv), optional")
+    parser.add_argument("--lineage-filter", choices=["discordant", "not_same", "none"], default="discordant",
+                        help="which events to keep by lineage relation (needs --contig-taxonomy)")
     parser.add_argument("--out", required=True, help="insitu_events.tsv")
+    parser.add_argument("--excluded", default="", help="events removed by the lineage filter, with reason")
     return parser.parse_args(argv)
 
 
@@ -75,12 +85,26 @@ def read_lineages(path):
 
 def discordant_rank(a, b):
     """First rank (d..s) at which two lineages both have a name and differ; '' if none."""
+    return lineage_relation(a, b)[1]
+
+
+def lineage_relation(a, b):
+    """
+    (relation, discordant_rank, shared_rank) for two lineages (names per rank d..s):
+      discordant   both named and different at some rank (the first such rank is returned)
+      same         identical names at every rank down to species
+      unresolved   identical as far as both are named, but one stops before species
+                   (includes unclassified contigs)
+    shared_rank is the deepest rank at which both are named and equal.
+    """
+    shared = ""
     for r, x, y in zip(RANKS, a, b):
         if not x or not y:
-            return ""
+            return "unresolved", "", shared
         if x != y:
-            return r
-    return ""
+            return "discordant", r, shared
+        shared = r
+    return "same", "", shared
 
 
 class Group:
@@ -91,12 +115,16 @@ class Group:
         idx = st.set_index(["segment_id", "t", "compartment"])
         self.state = idx["state"].to_dict()
         self.row = idx
-        present = st[st["state"] == "present"]
-        self.present = present.groupby("segment_id").apply(
-            lambda d: list(zip(d["t"], d["compartment"])), include_groups=False).to_dict()
+        self.present = self._index(st[st["state"] == "present"])
+        self.seen = self._index(st[st["state"].isin(["present", "partial"])])
 
-    def present_at(self, seg, t=None, before=None, compartments=None):
-        hits = self.present.get(seg, [])
+    @staticmethod
+    def _index(d):
+        return {seg: list(zip(x["t"], x["compartment"])) for seg, x in d.groupby("segment_id")}
+
+    def present_at(self, seg, t=None, before=None, compartments=None, seen=False):
+        """(t, compartment) where seg is present (seen=True: present or partial), filtered."""
+        hits = (self.seen if seen else self.present).get(seg, [])
         return [(tt, f) for tt, f in hits
                 if (t is None or tt == t) and (before is None or tt < before)
                 and (compartments is None or f in compartments)]
@@ -109,11 +137,12 @@ class Group:
         t = min(tt for tt, _ in hits)
         if not self.prior_times or t <= self.prior_times[0]:
             return None      # no earlier observation to compare with
-        if self.present_at(seg, before=t, compartments=self.prior):
+        if self.present_at(seg, before=t, compartments=self.prior, seen=True):
             return None
         for f in sorted(self.observed):
             if (t, f) in hits:
-                others = [ff for _, ff in self.present_at(seg, t=t, compartments=self.prior) if ff != f]
+                others = [ff for _, ff in self.present_at(seg, t=t, compartments=self.prior, seen=True)
+                          if ff != f]
                 if not others:
                     return t, f
         return None
@@ -136,7 +165,7 @@ def call_group(g, st, ev, observed, prior, seg_contig):
                 direction = "directed"
                 t_d = max(tt for tt, _ in donor_before)
                 donor_last = (t_d, ",".join(sorted({ff for tt, ff in donor_before if tt == t_d})))
-            elif grp.present_at(don, t=t) and not grp.present_at(don, before=t):
+            elif grp.present_at(don, t=t) and not grp.present_at(don, before=t, seen=True):
                 direction = "unresolved"
                 donor_last = (None, "")
             else:
@@ -161,8 +190,8 @@ def call_group(g, st, ev, observed, prior, seg_contig):
             later = [tt for tt in grp.times if tt > t]
             if later:
                 nxt = grp.states_at(rec, min(later), observed)
-                persistence = ("yes" if "present" in nxt else "no" if "absent" in nxt else
-                               "undetermined" if nxt else "NA")
+                persistence = ("yes" if "present" in nxt else "partial" if "partial" in nxt else
+                               "no" if "absent" in nxt else "undetermined" if nxt else "NA")
             else:
                 persistence = "NA"
 
@@ -171,6 +200,8 @@ def call_group(g, st, ev, observed, prior, seg_contig):
                 "group": g, "t": t, "event_id": e.event_id, "direction": direction, "tier": tier,
                 "recipient_contig": seg_contig[rec], "recipient_segment": rec, "recipient_compartment": f,
                 "recipient_reads": int(r["n"]),
+                "recipient_reads_left": r.get("n_left"), "recipient_reads_right": r.get("n_right"),
+                "recipient_contig_breadth": r.get("contig_breadth"),
                 "recipient_carrier_frac_depth": r["carrier_frac_depth"],
                 "recipient_carrier_frac_empty": r["carrier_frac_empty"],
                 "prev_t": tp, "prev_state": prev_state, "prev_empty_reads": prev_empty,
@@ -210,6 +241,7 @@ def main(argv=None):
 
     cols = ["group", "timepoint", "event_id", "direction", "tier",
             "recipient_contig", "recipient_segment", "recipient_compartment", "recipient_reads",
+            "recipient_reads_left", "recipient_reads_right", "recipient_contig_breadth",
             "recipient_carrier_frac_depth", "recipient_carrier_frac_empty",
             "prev_timepoint", "prev_state", "prev_empty_reads",
             "donor_contig", "donor_segment", "donor_last_timepoint", "donor_last_compartment",
@@ -226,8 +258,25 @@ def main(argv=None):
             return ";".join(parts) if any(parts) else ""
         out["recipient_lineage"] = [fmt(c) for c in out["recipient_contig"]]
         out["donor_lineage"] = [fmt(c) for c in out["donor_contig"]]
-        out["discordant_rank"] = [discordant_rank(lin.get(a, empty), lin.get(b, empty))
-                                  for a, b in zip(out["recipient_contig"], out["donor_contig"])]
+        rel = [lineage_relation(lin.get(a, empty), lin.get(b, empty))
+               for a, b in zip(out["recipient_contig"], out["donor_contig"])]
+        out["lineage_relation"] = [x[0] for x in rel]
+        out["discordant_rank"] = [x[1] for x in rel]
+        out["shared_rank"] = [x[2] for x in rel]
+        keep = {"discordant": {"discordant"}, "not_same": {"discordant", "unresolved"},
+                "none": {"discordant", "unresolved", "same"}}[args.lineage_filter]
+        drop = ~out["lineage_relation"].isin(keep)
+        excluded = out[drop].assign(reason="lineage_" + out.loc[drop, "lineage_relation"])
+        out = out[~drop]
+        print(f"lineage filter ({args.lineage_filter}): removed {int(drop.sum())} events "
+              f"({', '.join(f'{k} {v}' for k, v in excluded['lineage_relation'].value_counts().items()) or 'none'})",
+              file=sys.stderr)
+        if args.excluded:
+            excluded.to_csv(args.excluded, sep="\t", index=False)
+    elif args.lineage_filter != "none":
+        sys.exit("--lineage-filter needs --contig-taxonomy (or use --lineage-filter none)")
+    elif args.excluded:
+        out.head(0).assign(reason=[]).to_csv(args.excluded, sep="\t", index=False)
 
     out.to_csv(args.out, sep="\t", index=False)
     print(f"{len(out)} in situ events: " + (", ".join(

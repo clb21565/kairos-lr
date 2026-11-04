@@ -48,13 +48,20 @@ def states(rows):
     return pd.DataFrame(out)
 
 
-def run_insitu(tmp_path, st, observed="", prior=""):
+def run_insitu(tmp_path, st, observed="", prior="", lineages=None, lineage_filter="none"):
     st.to_csv(tmp_path / "states.tsv", sep="\t", index=False)
     SEGMENTS.to_csv(tmp_path / "segments.tsv", sep="\t", index=False)
     EVENTS.to_csv(tmp_path / "ev.tsv", sep="\t", index=False)
+    extra = []
+    if lineages:
+        # mmseqs createtsv layout: contig, taxid, rank, name, ..., lineage (last column)
+        (tmp_path / "tax.tsv").write_text("".join(
+            f"{c}\t1\tspecies\tx\t{lin}\n" for c, lin in lineages.items()))
+        extra = ["--contig-taxonomy", str(tmp_path / "tax.tsv")]
     ins.main(["--states", str(tmp_path / "states.tsv"), "--segments", str(tmp_path / "segments.tsv"),
               "--event-segments", str(tmp_path / "ev.tsv"), "--observed", observed, "--prior", prior,
-              "--out", str(tmp_path / "out.tsv")])
+              "--lineage-filter", lineage_filter, *extra,
+              "--out", str(tmp_path / "out.tsv"), "--excluded", str(tmp_path / "excluded.tsv")])
     return pd.read_csv(tmp_path / "out.tsv", sep="\t", dtype=str, keep_default_na=False)
 
 
@@ -141,3 +148,128 @@ def test_discordant_rank():
     b = ["Bacteria", "Pseudomonadota", "Betaproteobacteria", "Burkholderiales", "", "", ""]
     assert ins.discordant_rank(a, b) == "c"
     assert ins.discordant_rank(a, a) == ""
+
+
+def test_lineage_relation():
+    a = ["Bacteria", "Pseudomonadota", "Gammaproteobacteria", "Enterobacterales", "", "", ""]
+    full = ["Bacteria", "Bacillota", "Bacilli", "Lactobacillales", "Enterococcaceae", "Enterococcus",
+            "Enterococcus faecium"]
+    assert ins.lineage_relation(full, full) == ("same", "", "s")
+    assert ins.lineage_relation(a, a) == ("unresolved", "", "o")
+    assert ins.lineage_relation(full, full[:6] + ["Enterococcus faecalis"]) == ("discordant", "s", "g")
+    assert ins.lineage_relation(full, [""] * 7) == ("unresolved", "", "")
+
+
+# ── in situ: lineage filter ──────────────────────────────────────────────────
+
+DIRECTED = [(1, "X", "SD", "present"), (1, "X", "SR", "absent"),
+            (2, "X", "SD", "present"), (2, "X", "SR", "present")]
+EFAE = "d_Bacteria;p_Bacillota;c_Bacilli;o_Lactobacillales;f_Enterococcaceae;g_Enterococcus;s_Enterococcus faecium"
+ECOLI = "d_Bacteria;p_Pseudomonadota;c_Gammaproteobacteria;o_Enterobacterales;f_Enterobacteriaceae;g_Escherichia;s_Escherichia coli"
+ECOLI_G = "d_Bacteria;p_Pseudomonadota;c_Gammaproteobacteria;o_Enterobacterales;f_Enterobacteriaceae;g_Escherichia"
+
+
+def test_same_lineage_never_called(tmp_path):
+    for filt in ("discordant", "not_same"):
+        out = run_insitu(tmp_path, states(DIRECTED), lineages={"R": ECOLI, "D": ECOLI}, lineage_filter=filt)
+        assert len(out) == 0
+        exc = pd.read_csv(tmp_path / "excluded.tsv", sep="\t")
+        assert list(exc["reason"]) == ["lineage_same"]
+
+
+def test_discordant_lineage_kept(tmp_path):
+    out = run_insitu(tmp_path, states(DIRECTED), lineages={"R": ECOLI, "D": EFAE}, lineage_filter="discordant")
+    assert len(out) == 1
+    e = out.iloc[0]
+    assert (e.lineage_relation, e.discordant_rank, e.shared_rank) == ("discordant", "p", "d")
+
+
+def test_unresolved_lineage_needs_not_same(tmp_path):
+    # same down to genus, one contig not classified to species: cannot rule out the same species
+    lin = {"R": ECOLI, "D": ECOLI_G}
+    assert len(run_insitu(tmp_path, states(DIRECTED), lineages=lin, lineage_filter="discordant")) == 0
+    out = run_insitu(tmp_path, states(DIRECTED), lineages=lin, lineage_filter="not_same")
+    assert len(out) == 1 and out.iloc[0].lineage_relation == "unresolved"
+
+
+def test_filter_without_taxonomy_is_an_error(tmp_path):
+    with pytest.raises(SystemExit):
+        run_insitu(tmp_path, states(DIRECTED), lineage_filter="discordant")
+
+
+# ── in situ: partial evidence (one boundary or contig not detected) ──────────
+
+def test_partial_donor_is_not_a_donor(tmp_path):
+    out = run_insitu(tmp_path, states([
+        (1, "X", "SD", "partial"), (1, "X", "SR", "absent"),
+        (2, "X", "SD", "present"), (2, "X", "SR", "present"),
+    ]))
+    # donor only partially seen at t1: no earlier donor, and it was seen before t2 -> not unresolved either
+    assert len(out) == 0
+
+
+def test_partial_recipient_earlier_is_not_new(tmp_path):
+    out = run_insitu(tmp_path, states([
+        (1, "X", "SD", "present"), (1, "X", "SR", "partial"),
+        (2, "X", "SD", "present"), (2, "X", "SR", "present"),
+    ]))
+    assert len(out) == 0
+
+
+def test_partial_recipient_is_not_called(tmp_path):
+    out = run_insitu(tmp_path, states([
+        (1, "X", "SD", "present"), (1, "X", "SR", "absent"),
+        (2, "X", "SD", "present"), (2, "X", "SR", "partial"),
+        (3, "X", "SD", "present"), (3, "X", "SR", "present"),
+    ]))
+    # first full presence at t3, but it was partially seen at t2 -> not new at t3
+    assert len(out) == 0
+
+
+# ── detect_state: region boundaries and contig presence ──────────────────────
+
+def _call(seg, bp_counts, contig_rows, **kw):
+    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2,
+                              contig_min_breadth=0.5, contig_breadth_ratio=0.5, **kw))
+    obs = {"group": "G", "timepoint": "1", "compartment": "X"}
+    bp = pd.DataFrame([{**obs, "sample": "s1", "bp_id": b, "span": n, "bridge": 0, "flank_depth": 10,
+                        "mean_read_len": 150, "overhang": 25} for b, n in bp_counts.items()])
+    es = pd.DataFrame(columns=list(obs) + ["sample", "es_id", "empty"])
+    ct = pd.DataFrame([{**obs, "sample": "s1", "contig": c, "reads": r, "depth": d, "breadth": b}
+                       for c, r, d, b in contig_rows])
+    return ds.call_states(seg, bp, es, ct, args).set_index("segment_id")
+
+
+SEG = pd.DataFrame([
+    {"segment_id": "S1", "contig": "C1", "bp_left": "B1", "bp_right": "B2", "empty_site": ""},
+    {"segment_id": "S2", "contig": "C2", "bp_left": "B3", "bp_right": "", "empty_site": ""},
+])
+
+
+def test_present_needs_both_boundaries_and_contig():
+    st = _call(SEG, {"B1": 5, "B2": 5, "B3": 9}, [("C1", 500, 10, 0.99), ("C2", 500, 10, 0.99)])
+    assert st.loc["S1", "state"] == "present" and st.loc["S1", "boundaries"] == 2
+    # contig-end segment (one breakpoint) is never more than partial
+    assert st.loc["S2", "state"] == "partial"
+
+
+def test_one_boundary_only_is_partial():
+    st = _call(SEG, {"B1": 6, "B2": 0, "B3": 0}, [("C1", 500, 10, 0.99), ("C2", 500, 10, 0.99)])
+    assert st.loc["S1", "state"] == "partial"
+    assert (st.loc["S1", "n_left"], st.loc["S1", "n_right"]) == (6, 0)
+
+
+def test_contig_not_detected_is_partial():
+    # junction reads at both boundaries but the contig's own sequence is barely covered
+    st = _call(SEG, {"B1": 5, "B2": 5, "B3": 0}, [("C1", 40, 2.0, 0.05), ("C2", 0, 0, 0)])
+    assert st.loc["S1", "contig_state"] == "not_detected" and st.loc["S1", "state"] == "partial"
+
+
+def test_contig_breadth_pools_samples():
+    args = type("A", (), dict(contig_min_breadth=0.5, contig_breadth_ratio=0.5))
+    obs = {"group": "G", "timepoint": "1", "compartment": "X"}
+    ct = pd.DataFrame([{**obs, "sample": s, "contig": "C", "reads": 10, "depth": 0.4, "breadth": 0.33}
+                       for s in ("a", "b")])
+    c = ds.contig_states(ct, args).iloc[0]
+    # 1 - 0.67^2 = 0.551 >= 0.5, expected 1 - exp(-0.8) = 0.55
+    assert c.contig_breadth == pytest.approx(0.551, abs=1e-3) and c.contig_state == "present"

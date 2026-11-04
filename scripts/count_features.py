@@ -10,6 +10,13 @@ features from build_features.py. For each breakpoint:
                segment, neither spanning the breakpoint (paired-end only)
   flank_depth  mean depth over the breakpoint's own flank (sets the detection limit)
 
+for each event contig (contigs.bed: the contig minus all its regions and shared segments):
+
+  own_bp       length of that own sequence
+  reads        reads with an alignment start in it (MAPQ >= --min-mapq)
+  depth        mean depth over it
+  breadth      fraction of its bases covered by at least one read
+
 and for each empty site (contig with its shared segment removed):
 
   empty_split  reads whose alignment jumps from the left flank straight to the right flank,
@@ -37,6 +44,7 @@ import re
 import sys
 
 import mappy
+import numpy as np
 import pandas as pd
 import pysam
 
@@ -55,6 +63,7 @@ def parse_args(argv=None):
     parser.add_argument("--breakpoints", required=True, help="breakpoints.tsv from build_features.py")
     parser.add_argument("--flanks", required=True, help="flanks.bed from build_features.py")
     parser.add_argument("--empty-sites", required=True, help="empty_sites.tsv from build_features.py")
+    parser.add_argument("--contigs", required=True, help="contigs.bed from build_features.py")
     parser.add_argument("--overhang", type=int, default=25,
                         help="aligned bp needed on each side of a breakpoint / empty-site junction")
     parser.add_argument("--min-mapq", type=int, default=20, help="MAPQ for flank depth")
@@ -70,6 +79,7 @@ def parse_args(argv=None):
                         help="junctions.fa from build_features.py; enables the second pass (short reads)")
     parser.add_argument("--out-breakpoints", required=True)
     parser.add_argument("--out-empty-sites", required=True)
+    parser.add_argument("--out-contigs", required=True)
     return parser.parse_args(argv)
 
 
@@ -168,6 +178,32 @@ class Counter:
                 for b0, b1 in read.get_blocks():
                     bases += max(0, min(b1, e) - max(b0, s))
         return bases / total
+
+    def contig_own(self, contig, intervals):
+        """Reads, mean depth and breadth over a contig's own intervals [(s, e), ...]."""
+        a = self.a
+        lo, hi = min(s for s, _ in intervals), max(e for _, e in intervals)
+        diff = np.zeros(hi - lo + 1, dtype=np.int32)
+        mask = np.zeros(hi - lo, dtype=bool)
+        for s, e in intervals:
+            mask[s - lo:e - lo] = True
+        reads = 0
+        for read in self.bam.fetch(contig, lo, hi):
+            if not usable(read, a.min_mapq):
+                continue
+            rs = read.reference_start
+            if lo <= rs < hi and mask[rs - lo]:
+                reads += 1
+            for b0, b1 in read.get_blocks():
+                b0, b1 = max(b0, lo), min(b1, hi)
+                if b1 > b0:
+                    diff[b0 - lo] += 1
+                    diff[b1 - lo] -= 1
+        depth = np.cumsum(diff[:-1])[mask]
+        own = int(mask.sum())
+        return {"own_bp": own, "reads": reads,
+                "depth": float(depth.mean()) if own else float("nan"),
+                "breadth": float((depth > 0).mean()) if own else float("nan")}
 
     def empty_site(self, es_id, contig, s, e, junction_pos):
         """Evidence (template names) for the contig without its segment [s, e)."""
@@ -290,7 +326,15 @@ def main(argv=None):
                                  "empty_remap", "empty"]).to_csv(
         args.out_empty_sites, sep="\t", index=False)
 
-    print(f"{args.sample}: {len(out)} breakpoints, {len(erows)} empty sites, "
+    own = pd.read_csv(args.contigs, sep="\t", header=None, names=["contig", "start", "end"])
+    crows = []
+    for contig, d in own.groupby("contig", sort=False):
+        crows.append({"sample": args.sample, "read_type": args.read_type, "contig": contig,
+                      **counter.contig_own(contig, list(zip(d["start"], d["end"])))})
+    pd.DataFrame(crows, columns=["sample", "read_type", "contig", "own_bp", "reads", "depth", "breadth"]
+                 ).to_csv(args.out_contigs, sep="\t", index=False, float_format="%.4f")
+
+    print(f"{args.sample}: {len(out)} breakpoints, {len(erows)} empty sites, {len(crows)} contigs, "
           f"mean read length {out['mean_read_len'].iloc[0] if len(out) else 'NA'}", file=sys.stderr)
 
 

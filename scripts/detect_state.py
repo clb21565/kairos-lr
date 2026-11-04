@@ -14,7 +14,21 @@ For each observation and segment:
             lambda, which only makes the absent call more conservative.
   empty     empty-site evidence (split reads + read pairs) for this contig without the segment
 
-  present        n >= k
+A segment counts as present only when both the region and its host contig are seen:
+
+  boundaries     the segment's breakpoints with >= k junction reads each (n_left, n_right)
+  contig_state   whether the contig's own sequence (contigs.bed: the contig minus all its
+                 regions) is present: pooled breadth >= --contig-min-breadth and
+                 breadth >= --contig-breadth-ratio x the breadth expected at that depth
+                 (1 - exp(-depth)); the ratio rules out reads piled up on a short stretch.
+                 Otherwise "not_detected".
+
+  present        the segment has >= --min-boundaries breakpoints, every one of them has >= k
+                 junction reads, and contig_state is present
+  partial        n >= k junction reads in total, but not present: only one boundary seen, the
+                 segment has fewer than --min-boundaries breakpoints (contig-end region), or the
+                 contig itself is not detected. In situ treats partial as "seen" when asking
+                 whether a contig was there before, but never as a present recipient or donor.
   absent         n < k and P(N < k | lambda * f) <= alpha   (Poisson; f = --absent-fraction)
   undetermined   otherwise (too shallow to tell), or the segment has no breakpoint
 
@@ -29,6 +43,7 @@ import math
 import os
 import sys
 
+import numpy as np
 import pandas as pd
 
 OBS = ["group", "timepoint", "compartment"]
@@ -48,6 +63,12 @@ def parse_args(argv=None):
                         help="largest P(fewer than k reads | carried) at which absent is called")
     parser.add_argument("--absent-fraction", type=float, default=1.0,
                         help="carrier fraction that an absent call rules out")
+    parser.add_argument("--min-boundaries", type=int, default=2,
+                        help="breakpoints a segment needs to be called present (2 = internal regions only)")
+    parser.add_argument("--contig-min-breadth", type=float, default=0.5,
+                        help="breadth of the contig's own sequence needed to call the contig present")
+    parser.add_argument("--contig-breadth-ratio", type=float, default=0.5,
+                        help="observed / expected breadth needed to call the contig present")
     parser.add_argument("--out-segments", required=True, help="segments.tsv (segment definitions)")
     parser.add_argument("--out-states", required=True, help="states.tsv (one row per observation x segment)")
     parser.add_argument("--out-event-segments", required=True,
@@ -69,13 +90,17 @@ def segments_from_events(events):
         cols = {f"contig_{i}": "contig", f"shared_start_{i}": "shared_start",
                 f"shared_end_{i}": "shared_end", f"bp_left_{i}": "bp_left",
                 f"bp_right_{i}": "bp_right", f"empty_site_{i}": "empty_site"}
+        if f"region_type_{i}" in events.columns:
+            cols[f"region_type_{i}"] = "region_type"
         s = events[list(cols)].rename(columns=cols)
         s["event_id"], s["side"] = events["event_id"], i
         sides.append(s)
     sides = pd.concat(sides, ignore_index=True).fillna({"bp_left": "", "bp_right": "", "empty_site": ""})
     key = ["contig", "bp_left", "bp_right", "empty_site"]
     seg = (sides.groupby(key, sort=False)
-           .agg(shared_start=("shared_start", "min"), shared_end=("shared_end", "max"))
+           .agg(shared_start=("shared_start", "min"), shared_end=("shared_end", "max"),
+                **({"region_type": ("region_type", lambda x: ",".join(sorted(set(x) - {""})))}
+                   if "region_type" in sides.columns else {}))
            .reset_index())
     seg.insert(0, "segment_id", [f"SG{i:07d}" for i in range(1, len(seg) + 1)])
     sides = sides.merge(seg[key + ["segment_id"]], on=key)
@@ -83,18 +108,32 @@ def segments_from_events(events):
 
 
 def load_counts(samples, counts_dir):
-    bp, es = [], []
+    bp, es, ct = [], [], []
     for s in samples["sample"]:
         d = os.path.join(counts_dir, s)
         bp.append(pd.read_csv(os.path.join(d, f"{s}.breakpoint_counts.tsv"), sep="\t"))
         es.append(pd.read_csv(os.path.join(d, f"{s}.empty_site_counts.tsv"), sep="\t"))
-    bp = pd.concat(bp, ignore_index=True)
-    es = pd.concat(es, ignore_index=True)
+        ct.append(pd.read_csv(os.path.join(d, f"{s}.contig_counts.tsv"), sep="\t"))
     meta = samples[["sample"] + OBS]
-    return bp.merge(meta, on="sample"), es.merge(meta, on="sample")
+    return [pd.concat(x, ignore_index=True).merge(meta, on="sample") for x in (bp, es, ct)]
 
 
-def call_states(seg, bp, es, args):
+def contig_states(ct, args):
+    """Pool each observation's samples per contig; breadths combine as independent coverage."""
+    ct = ct.assign(miss=1 - ct["breadth"].fillna(0))
+    c = ct.groupby(OBS + ["contig"], as_index=False).agg(
+        contig_reads=("reads", "sum"), contig_depth=("depth", "sum"), miss=("miss", "prod"))
+    c["contig_breadth"] = 1 - c["miss"]
+    expected = 1 - np.exp(-c["contig_depth"])
+    ok = ((c["contig_breadth"] >= args.contig_min_breadth) &
+          (c["contig_breadth"] >= args.contig_breadth_ratio * expected) & (c["contig_reads"] > 0))
+    c["contig_state"] = np.where(ok, "present", "not_detected")
+    c["contig_depth"] = c["contig_depth"].round(2)
+    c["contig_breadth"] = c["contig_breadth"].round(3)
+    return c.drop(columns="miss")
+
+
+def call_states(seg, bp, es, ct, args):
     # expected spanning reads per sample and breakpoint
     L, a = bp["mean_read_len"], bp["overhang"]
     bp["lam"] = (bp["flank_depth"].fillna(0) * ((L - 2 * a) / L).clip(lower=0)).fillna(0)
@@ -105,37 +144,50 @@ def call_states(seg, bp, es, args):
 
     # segment -> its breakpoints (long form)
     seg_bp = pd.concat([
-        seg[["segment_id", "bp_left"]].rename(columns={"bp_left": "bp_id"}),
-        seg[["segment_id", "bp_right"]].rename(columns={"bp_right": "bp_id"}),
+        seg[["segment_id", "bp_left"]].rename(columns={"bp_left": "bp_id"}).assign(end="left"),
+        seg[["segment_id", "bp_right"]].rename(columns={"bp_right": "bp_id"}).assign(end="right"),
     ])
     seg_bp = seg_bp[seg_bp["bp_id"] != ""]
 
     obs = bp[OBS].drop_duplicates()
-    grid = obs.merge(seg[["segment_id", "empty_site"]], how="cross")
+    grid = obs.merge(seg[["segment_id", "contig", "empty_site"]], how="cross")
     agg = (seg_bp.merge(per_bp, on="bp_id")
            .groupby(OBS + ["segment_id"], as_index=False)
            .agg(n=("n", "sum"), n_span=("n_span", "sum"), lam=("lam", "sum"),
                 flank_depth=("flank_depth", "mean"),
                 n_breakpoints=("bp_id", "nunique")))
+    k, f = args.min_reads, args.absent_fraction
+    ends = seg_bp.merge(per_bp, on="bp_id")
+    ends = (ends.pivot_table(index=OBS + ["segment_id"], columns="end", values="n", aggfunc="sum")
+            .reindex(columns=["left", "right"]).add_prefix("n_").reset_index())
+    ends.columns.name = None
     st = grid.merge(agg, on=OBS + ["segment_id"], how="left")
+    st = st.merge(ends, on=OBS + ["segment_id"], how="left")
+    st = st.merge(contig_states(ct, args), on=OBS + ["contig"], how="left")
+    st["contig_state"] = st["contig_state"].fillna("not_detected")
     st = st.merge(per_es.rename(columns={"es_id": "empty_site"}), on=OBS + ["empty_site"], how="left")
     st[["n", "n_span", "lam", "n_breakpoints"]] = st[["n", "n_span", "lam", "n_breakpoints"]].fillna(0)
     st["empty"] = st["empty"].where(st["empty_site"] != "", float("nan"))
 
-    k, f = args.min_reads, args.absent_fraction
     p_miss = st["lam"].apply(lambda lam: poisson_cdf_below(k, lam * f))
     st["p_miss"] = p_miss.round(4)
     st["state"] = "undetermined"
     st.loc[(st["n_breakpoints"] > 0) & (p_miss <= args.alpha), "state"] = "absent"
-    st.loc[st["n"] >= k, "state"] = "present"
+    st["boundaries"] = (st[["n_left", "n_right"]] >= k).sum(axis=1)
+    st.loc[st["n"] >= k, "state"] = "partial"
+    strict = ((st["n_breakpoints"] >= args.min_boundaries) & (st["boundaries"] == st["n_breakpoints"])
+              & (st["contig_state"] == "present"))
+    st.loc[(st["n"] >= k) & strict, "state"] = "present"
     st["carrier_frac_depth"] = (st["n_span"] / st["lam"]).where(st["lam"] > 0).round(3)
     tot = st["n"] + st["empty"]
     st["carrier_frac_empty"] = (st["n"] / tot).where(tot > 0).round(3)
     st["lam"] = st["lam"].round(2)
     st["flank_depth"] = st["flank_depth"].round(2)
-    cols = OBS + ["segment_id", "state", "n", "n_span", "lam", "p_miss", "empty", "flank_depth",
-                  "carrier_frac_depth", "carrier_frac_empty", "n_breakpoints"]
-    return st[cols].astype({"n": int, "n_span": int, "n_breakpoints": int})
+    cols = OBS + ["segment_id", "state", "n", "n_left", "n_right", "boundaries", "n_breakpoints",
+                  "contig_state", "contig_depth", "contig_breadth", "n_span", "lam", "p_miss", "empty",
+                  "flank_depth", "carrier_frac_depth", "carrier_frac_empty"]
+    return st[cols].astype({"n": int, "n_span": int, "n_breakpoints": int, "boundaries": int,
+                            "n_left": "Int64", "n_right": "Int64"})
 
 
 def main(argv=None):
@@ -148,8 +200,8 @@ def main(argv=None):
                          dtype={"bp_left_1": str, "bp_right_1": str, "empty_site_1": str,
                                 "bp_left_2": str, "bp_right_2": str, "empty_site_2": str})
     seg, sides = segments_from_events(events)
-    bp, es = load_counts(samples, args.counts_dir)
-    states = call_states(seg, bp, es, args)
+    bp, es, ct = load_counts(samples, args.counts_dir)
+    states = call_states(seg, bp, es, ct, args)
 
     seg_out = seg.merge(
         sides.groupby("segment_id")["event_id"].apply(lambda x: ";".join(sorted(set(x)))).rename("events"),

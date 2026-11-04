@@ -1,7 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # assess.smk
 # Map each sample's reads to the whole catalogue (competitive mapping) and count
-# reads at every breakpoint, its flank and its empty site (count_features.py).
+# reads at every breakpoint, its flank, its empty site and its contig's own sequence
+# (count_features.py).
 #
 #   short reads (short_pe, short_se): strobealign (default) or bwa-mem2
 #   long reads  (ont, hifi):          minimap2, preset per read type
@@ -139,10 +140,12 @@ rule count_features:
         breakpoints=f"{DET}.features/breakpoints.tsv",
         flanks=f"{DET}.features/flanks.bed",
         empty_sites=f"{DET}.features/empty_sites.tsv",
+        contigs=f"{DET}.features/contigs.bed",
         junctions=f"{DET}.features/junctions.fa"
     output:
         breakpoints=f"{ASM}/{{sample}}/{{sample}}.breakpoint_counts.tsv",
-        empty_sites=f"{ASM}/{{sample}}/{{sample}}.empty_site_counts.tsv"
+        empty_sites=f"{ASM}/{{sample}}/{{sample}}.empty_site_counts.tsv",
+        contigs=f"{ASM}/{{sample}}/{{sample}}.contig_counts.tsv"
     params:
         read_type=read_type,
         overhang=lambda wc: ASSESS["overhang"]["short" if read_type(wc) in SHORT_TYPES else "long"],
@@ -157,6 +160,7 @@ rule count_features:
         " --breakpoints {input.breakpoints}"
         " --flanks {input.flanks}"
         " --empty-sites {input.empty_sites}"
+        " --contigs {input.contigs}"
         " --overhang {params.overhang}"
         " --min-mapq {ASSESS[min_mapq]}"
         " --junction-min-mapq {ASSESS[junction_min_mapq]}"
@@ -165,3 +169,4 @@ rule count_features:
         " {params.junctions}"
         " --out-breakpoints {output.breakpoints}"
         " --out-empty-sites {output.empty_sites}"
+        " --out-contigs {output.contigs}"

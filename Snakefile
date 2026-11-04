@@ -8,6 +8,7 @@ import sys
 
 import pandas as pd
 from snakemake.utils import min_version, validate
+from snakemake.exceptions import WorkflowError
 
 min_version("9.9.0")
 
@@ -74,6 +75,8 @@ ASSESS = config["assess"]
 
 # ── Call parameters (detect_state.py, insitu.py) ────────────────────────────
 CALL = config["call"]
+if CALL["lineage_filter"] != "none" and not CALL["use_taxonomy"]:
+    raise WorkflowError("call.lineage_filter needs call.use_taxonomy: true (or set lineage_filter: none)")
 
 # ── Script paths ────────────────────────────────────────────────────────────
 SCRIPTS_DIR = config.get("scripts_dir") or os.path.join(workflow.basedir, "scripts")

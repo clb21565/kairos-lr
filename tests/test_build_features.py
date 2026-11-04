@@ -140,3 +140,18 @@ def test_flanks_exclude_other_regions(tmp_path):
     pieces = bed[bed.bp == left_a.bp_id]
     # the 1000 bp to the left of a's segment overlap a_region_1 (ends at 2000); only 2000-2300 is kept
     assert pieces["s"].min() >= 2000 and left_a.flank_bp <= 300
+
+
+def test_contigs_bed_is_contig_minus_regions(catalogue):
+    tmp, seqs, _ = catalogue
+    out, ev, _, _ = run(tmp)
+    bed = pd.read_csv(out / "contigs.bed", sep="\t", header=None, names=["contig", "s", "e"])
+    assert set(bed.contig) == {"host1", "host2", "host3"}
+    h1 = bed[bed.contig == "host1"].sort_values("s")
+    # host1: own sequence either side of the 4000 bp shared segment (refined to 3000-7000)
+    # (alignment ends can extend a few bp where random flank bases happen to match)
+    assert len(h1) == 2 and h1.s.iloc[0] == 0 and abs(h1.e.iloc[0] - 3000) <= 5
+    assert abs(h1.s.iloc[1] - 7000) <= 5 and h1.e.iloc[1] == 10000
+    h3 = bed[bed.contig == "host3"]
+    assert len(h3) == 1 and h3.s.iloc[0] == 0 and abs(h3.e.iloc[0] - 5000) <= 5
+    assert set(ev.region_type_1) == {""}   # test metadata has no region_type column

@@ -26,7 +26,7 @@ def run(outdir, use_conda, short_aligner, extra):
     subprocess.run([sys.executable, os.path.join(HERE, "make_sim_data.py"), outdir], check=True)
     open(os.path.join(outdir, "gtdb"), "w").close()     # detect taxonomy is not run here
     with open(os.path.join(outdir, "sim_config.yaml"), "w") as f:
-        f.write(f"call:\n  use_taxonomy: false\nassess:\n  short_aligner: {short_aligner}\n")
+        f.write(f"call:\n  use_taxonomy: false\n  lineage_filter: none\nassess:\n  short_aligner: {short_aligner}\n")
     cmd = ["snakemake", "assess", "call", "-s", os.path.join(REPO, "Snakefile"), "-d", outdir,
            "--configfile", os.path.join(REPO, "config", "config.yaml"),
            os.path.join(outdir, "sim_config.yaml"),
@@ -92,6 +92,16 @@ def check(outdir):
     expect(S[2, "asm1_host1"] == "present", f"t2: host1 segment present ({S[2, 'asm1_host1']})")
     expect(all(S[t, "asm2_host2"] == "present" for t in (1, 2, 3)), "host2 segment present at t1-t3")
     expect(all(S[t, "asm3_host3"] == "undetermined" for t in (1, 2, 3)), "host3 (not sequenced) undetermined")
+    X = st.set_index(["timepoint", "contig"])
+    expect(X.loc[(2, "asm1_host1"), "boundaries"] == 2, "t2: host1 both boundaries seen")
+    expect(all(X.loc[(t, "asm1_host1"), "contig_state"] == "present" for t in (1, 2)),
+           "host1 contig present at t1-t2 (own sequence)")
+    expect(all(X.loc[(t, "asm3_host3"), "contig_state"] == "not_detected" for t in (1, 2, 3)),
+           "host3 contig not detected")
+    cc = pd.concat(pd.read_csv(os.path.join(res, "assess", s, f"{s}.contig_counts.tsv"), sep="\t")
+                   for s in samples["sample"]).set_index(["sample", "contig"])
+    expect(cc.loc[("t1_short", "asm1_host1"), "breadth"] > 0.95,
+           f"t1_short: host1 own-sequence breadth ({cc.loc[('t1_short', 'asm1_host1'), 'breadth']:.3f})")
     cf = st.set_index(["timepoint", "contig"])["carrier_frac_depth"][2, "asm1_host1"]
     expect(0.3 <= cf <= 0.75, f"t2: host1 carrier fraction ~0.5 ({cf})")
 
