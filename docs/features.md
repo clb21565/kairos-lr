@@ -113,6 +113,7 @@ sample, as opposed to only its mobile segment.
 |---|---|
 | `span` | reads aligned across `pos` with at least `overhang` bp on each side |
 | `bridge` | read pairs with one mate in the own flank and the other in the segment (paired-end only) |
+| `window_reads` | reads with ≥ `assess.window_min_aligned` (100) bp aligned inside ±`assess.window_half` (75) bp of `pos`: the original kairos assess window (75 bp of context + 75 bp of shared sequence), measured on the same catalogue alignments instead of a window-only salmon index. For short reads this forces ≥ 25 bp on each side, so it normally equals `span`. Readout only |
 | `flank_depth` | mean depth over `flanks.bed`, at MAPQ ≥ `assess.min_mapq` |
 | `mean_read_len`, `overhang` | used for λ |
 
@@ -175,6 +176,14 @@ events it belongs to). If one segment takes part in several events, it appears o
 | `empty` | empty-site templates |
 | `carrier_frac_depth` | n_span / λ |
 | `carrier_frac_empty` | n / (n + empty) |
+| `n_window` | `window_reads` summed over the segment's breakpoints (and pooled samples) |
+| `contig_window_prop` | fraction of the contig's breakpoint windows (over all its segments) with ≥ 1 read |
+| `contig_window_pass` | `contig_window_prop` > `call.window_min_prop` (0.9): the original kairos assess detection rule (`get_props.py`) |
+
+The last three reproduce kairos assess for comparison with the paper. They are not used to call
+`state`. Two differences remain: windows sit on the mappy-refined breakpoints, not on the raw
+asm5 alignment ends, and windows are not clustered at 99%, so reads tied between identical
+junctions (MAPQ 0) are not counted.
 
 `state` takes one of four values:
 

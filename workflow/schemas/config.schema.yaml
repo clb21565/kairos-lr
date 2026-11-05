@@ -48,10 +48,13 @@ properties:
       max_insert:        {type: integer, minimum: 1}
       empty_tolerance:   {type: integer, minimum: 0}
       second_pass:       {type: boolean}
+      window_half:       {type: integer, minimum: 1, default: 75}
+      window_min_aligned: {type: integer, minimum: 1, default: 100}
     required: [short_aligner, short_read_length, long_read_presets, min_mapq, junction_min_mapq, overhang, max_insert, empty_tolerance, second_pass]
   call:
     type: object
     properties:
+      window_min_prop:    {type: number, minimum: 0, maximum: 1, default: 0.9}
       pool:               {type: string, enum: [observation, sample], default: observation}
       min_reads:          {type: integer, minimum: 1}
       alpha:              {type: number, exclusiveMinimum: 0, maximum: 1}

@@ -149,6 +149,8 @@ rule count_features:
     params:
         read_type=read_type,
         overhang=lambda wc: ASSESS["overhang"]["short" if read_type(wc) in SHORT_TYPES else "long"],
+        window_half=ASSESS.get("window_half", 75),
+        window_min_aligned=ASSESS.get("window_min_aligned", 100),
         junctions=lambda wc, input: f"--junctions {input.junctions}" if ASSESS["second_pass"] else ""
     conda:
         "../envs/python.yaml"
@@ -166,6 +168,8 @@ rule count_features:
         " --junction-min-mapq {ASSESS[junction_min_mapq]}"
         " --max-insert {ASSESS[max_insert]}"
         " --empty-tolerance {ASSESS[empty_tolerance]}"
+        " --window-half {params.window_half}"
+        " --window-min-aligned {params.window_min_aligned}"
         " {params.junctions}"
         " --out-breakpoints {output.breakpoints}"
         " --out-empty-sites {output.empty_sites}"

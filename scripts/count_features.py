@@ -8,6 +8,10 @@ features from build_features.py. For each breakpoint:
   span         reads aligned across the breakpoint with at least --overhang bp on both sides
   bridge       read pairs with one mate in the contig's own flank and the other in the shared
                segment, neither spanning the breakpoint (paired-end only)
+  window_reads reads with >= --window-min-aligned bp aligned inside the window of +-
+               --window-half bp around the breakpoint (kairos assess: 150 bp windows, 75 bp of
+               context + 75 bp of shared sequence, reads aligned >= 100 bp, so >= 25 bp on each
+               side). Counted from the same catalogue alignments; reported, not used in calls.
   flank_depth  mean depth over the breakpoint's own flank (sets the detection limit)
 
 for each event contig (contigs.bed: the contig minus all its regions and shared segments):
@@ -75,6 +79,10 @@ def parse_args(argv=None):
                         help="deletions up to this size do not break a spanning alignment")
     parser.add_argument("--empty-tolerance", type=int, default=50,
                         help="how far (bp) an alignment break may be from the empty-site junction")
+    parser.add_argument("--window-half", type=int, default=75,
+                        help="half width of the kairos assess window around each breakpoint")
+    parser.add_argument("--window-min-aligned", type=int, default=100,
+                        help="aligned bp inside the window for a read to count in window_reads")
     parser.add_argument("--junctions", default="",
                         help="junctions.fa from build_features.py; enables the second pass (short reads)")
     parser.add_argument("--out-breakpoints", required=True)
@@ -141,6 +149,18 @@ class Counter:
                 span += 1
         bridge = self.bridges(contig, pos, side) if self.paired else 0
         return span, bridge
+
+    def window(self, contig, pos):
+        """Reads with >= window_min_aligned bp aligned inside [pos - half, pos + half)."""
+        a = self.a
+        s, e = max(0, pos - a.window_half), pos + a.window_half
+        n = 0
+        for read in self.bam.fetch(contig, s, e):
+            if not usable(read, a.junction_min_mapq):
+                continue
+            inside = sum(max(0, min(b1, e) - max(b0, s)) for b0, b1 in read.get_blocks())
+            n += inside >= a.window_min_aligned
+        return n
 
     def bridges(self, contig, pos, side):
         """Pairs with the flank mate on the contig's own side and the other mate in the shared segment."""
@@ -308,10 +328,10 @@ def main(argv=None):
     for r in bps.itertuples(index=False):
         span, bridge = counter.breakpoint(r.contig, r.pos, r.side)
         rows.append({"sample": args.sample, "read_type": args.read_type, "bp_id": r.bp_id,
-                     "span": span, "bridge": bridge,
+                     "span": span, "bridge": bridge, "window_reads": counter.window(r.contig, r.pos),
                      "flank_depth": counter.flank_depth(flank_iv.get(r.bp_id, [])),
                      "flank_bp": r.flank_bp})
-    out = pd.DataFrame(rows, columns=["sample", "read_type", "bp_id", "span", "bridge",
+    out = pd.DataFrame(rows, columns=["sample", "read_type", "bp_id", "span", "bridge", "window_reads",
                                       "flank_depth", "flank_bp"])
     lengths = counter.read_lengths
     out["mean_read_len"] = round(sum(lengths) / len(lengths), 1) if lengths else float("nan")

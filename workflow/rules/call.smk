@@ -21,7 +21,8 @@ rule detect_state:
         states=f"{CALLDIR}/states.tsv",
         event_segments=f"{CALLDIR}/event_segments.tsv"
     params:
-        pool=CALL.get("pool", "observation")
+        pool=CALL.get("pool", "observation"),
+        window_min_prop=CALL.get("window_min_prop", 0.9)
     conda:
         "../envs/python.yaml"
     shell:
@@ -35,6 +36,7 @@ rule detect_state:
         " --min-boundaries {CALL[min_boundaries]}"
         " --contig-min-breadth {CALL[contig_min_breadth]}"
         " --contig-breadth-ratio {CALL[contig_breadth_ratio]}"
+        " --window-min-prop {params.window_min_prop}"
         " --pool {params.pool}"
         " --out-segments {output.segments}"
         " --out-states {output.states}"

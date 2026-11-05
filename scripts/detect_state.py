@@ -35,6 +35,13 @@ A segment counts as present only when both the region and its host contig are se
   absent         n < k and P(N < k | lambda * f) <= alpha   (Poisson; f = --absent-fraction)
   undetermined   otherwise (too shallow to tell), or the segment has no breakpoint
 
+kairos assess readout (reported, not used in the states above):
+  n_window            reads in the original kairos assess windows (window_reads from count_features:
+                      >= 100 bp aligned within +-75 bp of a breakpoint), summed over the segment's
+                      breakpoints
+  contig_window_prop  fraction of the contig's breakpoint windows (all of its segments) with >= 1 read
+  contig_window_pass  contig_window_prop > --window-min-prop (kairos assess: 0.9)
+
 "absent" means the segment is not carried by a fraction f or more of the host population at
 that depth. Carrier-fraction estimates are reported as n_span / lambda (spanning reads against
 the depth expectation; unbiased, noisy at low depth) and n / (n + empty) (against the empty
@@ -72,6 +79,9 @@ def parse_args(argv=None):
                         help="breadth of the contig's own sequence needed to call the contig present")
     parser.add_argument("--contig-breadth-ratio", type=float, default=0.5,
                         help="observed / expected breadth needed to call the contig present")
+    parser.add_argument("--window-min-prop", type=float, default=0.9,
+                        help="kairos assess readout: contig detected if more than this fraction of its "
+                             "breakpoint windows have a read")
     parser.add_argument("--pool", choices=["observation", "sample"], default="observation",
                         help="observation: sum each observation's samples before calling; "
                              "sample: call every sample on its own")
@@ -145,8 +155,11 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
     L, a = bp["mean_read_len"], bp["overhang"]
     bp["lam"] = (bp["flank_depth"].fillna(0) * ((L - 2 * a) / L).clip(lower=0)).fillna(0)
     bp["n"] = bp["span"] + bp["bridge"]
+    if "window_reads" not in bp.columns:          # counts from before the window readout
+        bp["window_reads"] = float("nan")
     per_bp = bp.groupby(keys + ["bp_id"], as_index=False).agg(
-        n=("n", "sum"), n_span=("span", "sum"), lam=("lam", "sum"), flank_depth=("flank_depth", "sum"))
+        n=("n", "sum"), n_span=("span", "sum"), lam=("lam", "sum"), flank_depth=("flank_depth", "sum"),
+        n_window=("window_reads", lambda x: x.sum(min_count=1)))
     per_es = es.groupby(keys + ["es_id"], as_index=False)["empty"].sum()
 
     # segment -> its breakpoints (long form)
@@ -162,6 +175,7 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
            .groupby(keys + ["segment_id"], as_index=False)
            .agg(n=("n", "sum"), n_span=("n_span", "sum"), lam=("lam", "sum"),
                 flank_depth=("flank_depth", "mean"),
+                n_window=("n_window", lambda x: x.sum(min_count=1)),
                 n_breakpoints=("bp_id", "nunique")))
     k, f = args.min_reads, args.absent_fraction
     ends = seg_bp.merge(per_bp, on="bp_id")
@@ -171,6 +185,16 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
     st = grid.merge(agg, on=keys + ["segment_id"], how="left")
     st = st.merge(ends, on=keys + ["segment_id"], how="left")
     st = st.merge(contig_states(ct, args, keys), on=keys + ["contig"], how="left")
+    # kairos assess readout: fraction of the contig's breakpoint windows with a read
+    cbp = seg_bp.merge(seg[["segment_id", "contig"]], on="segment_id")[["contig", "bp_id"]].drop_duplicates()
+    cw = cbp.merge(per_bp, on="bp_id")
+    cw = (cw.assign(hit=(cw["n_window"] > 0).where(cw["n_window"].notna()))
+          .groupby(keys + ["contig"], as_index=False)["hit"].mean()
+          .rename(columns={"hit": "contig_window_prop"}))
+    st = st.merge(cw, on=keys + ["contig"], how="left")
+    st["contig_window_pass"] = (st["contig_window_prop"] > args.window_min_prop).where(
+        st["contig_window_prop"].notna())
+    st["contig_window_prop"] = st["contig_window_prop"].round(3)
     st["contig_state"] = st["contig_state"].fillna("not_detected")
     st = st.merge(per_es.rename(columns={"es_id": "empty_site"}), on=keys + ["empty_site"], how="left")
     st[["n", "n_span", "lam", "n_breakpoints"]] = st[["n", "n_span", "lam", "n_breakpoints"]].fillna(0)
@@ -192,9 +216,11 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
     st["flank_depth"] = st["flank_depth"].round(2)
     cols = keys + ["segment_id", "state", "n", "n_left", "n_right", "boundaries", "n_breakpoints",
                   "contig_state", "contig_depth", "contig_breadth", "n_span", "lam", "p_miss", "empty",
-                  "flank_depth", "carrier_frac_depth", "carrier_frac_empty"]
+                  "flank_depth", "carrier_frac_depth", "carrier_frac_empty",
+                  "n_window", "contig_window_prop", "contig_window_pass"]
     return st[cols].astype({"n": int, "n_span": int, "n_breakpoints": int, "boundaries": int,
-                            "n_left": "Int64", "n_right": "Int64"})
+                            "n_left": "Int64", "n_right": "Int64", "n_window": "Int64",
+                            "contig_window_pass": "boolean"})
 
 
 def main(argv=None):

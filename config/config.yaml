@@ -91,6 +91,9 @@ assess:
     short: 25
     long: 100
   max_insert: 1000                # largest insert for a bridging read pair
+  window_half: 75                 # kairos assess windows: +-75 bp around each breakpoint (150 bp, 75 bp
+  window_min_aligned: 100         #   context + 75 bp shared); a read counts with >= 100 bp aligned inside.
+                                  #   Readout only (window_reads, contig_window_prop); not used in calls.
   empty_tolerance: 50             # bp an alignment break may sit from the empty-site junction
   second_pass: true               # short reads: realign clipped/unmapped reads near segment ends to
                                   # the empty-site sequences (split-read evidence for strobealign)
@@ -108,6 +111,8 @@ call:
                             # kairos criterion 2; contig-end regions are at most "partial")
   contig_min_breadth: 0.5   # host contig present: breadth of its own sequence (minus all regions) >= this
   contig_breadth_ratio: 0.5 #   ... and >= this x the breadth expected at its depth, 1 - exp(-depth)
+  window_min_prop: 0.9      # kairos assess detection readout: contig_window_pass if > this fraction
+                            # of the contig's breakpoint windows have a read (not used in calls)
   alpha: 0.05               # absent if P(fewer than k reads | carried) <= alpha
   absent_fraction: 1.0      # carrier fraction an absent call rules out (1.0 = whole host population)
   observed_compartments: []    # compartments where recipients are looked for (empty = all), e.g. [INF]

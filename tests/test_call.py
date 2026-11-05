@@ -229,7 +229,7 @@ def test_partial_recipient_is_not_called(tmp_path):
 # ── detect_state: region boundaries and contig presence ──────────────────────
 
 def _call(seg, bp_counts, contig_rows, **kw):
-    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2,
+    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2, window_min_prop=0.9,
                               contig_min_breadth=0.5, contig_breadth_ratio=0.5, **kw))
     obs = {"group": "G", "timepoint": "1", "compartment": "X"}
     bp = pd.DataFrame([{**obs, "sample": "s1", "bp_id": b, "span": n, "bridge": 0, "flank_depth": 10,
@@ -280,7 +280,7 @@ def test_contig_breadth_pools_samples():
 def test_pool_sample_keeps_samples_apart():
     # two libraries of one observation, each with one junction read per boundary:
     # pooled they reach k = 2 at both boundaries; per sample, neither boundary does
-    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2,
+    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2, window_min_prop=0.9,
                               contig_min_breadth=0.5, contig_breadth_ratio=0.5))
     obs = {"group": "G", "timepoint": "1", "compartment": "X"}
     bp = pd.DataFrame([{**obs, "sample": s, "bp_id": b, "span": 1, "bridge": 0, "flank_depth": 1,
@@ -316,3 +316,27 @@ def test_insitu_with_per_sample_states(tmp_path):
     out = run_insitu(tmp_path, st)
     assert len(out) == 1 and out.iloc[0].recipient_samples == "lib1"
     assert out.iloc[0].samples_present == "1"
+
+
+# ── kairos assess window readout ─────────────────────────────────────────────
+
+def test_window_readout():
+    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2,
+                              window_min_prop=0.9, contig_min_breadth=0.5, contig_breadth_ratio=0.5))
+    obs = {"group": "G", "timepoint": "1", "compartment": "X"}
+    w = {"B1": 3, "B2": 0, "B3": 4}
+    bp = pd.DataFrame([{**obs, "sample": "s1", "bp_id": b, "span": 2, "bridge": 0, "window_reads": n,
+                        "flank_depth": 10, "mean_read_len": 150, "overhang": 25} for b, n in w.items()])
+    es = pd.DataFrame(columns=list(obs) + ["sample", "es_id", "empty"])
+    ct = pd.DataFrame([{**obs, "sample": "s1", "contig": c, "reads": 500, "depth": 10, "breadth": 0.99}
+                       for c in ("C1", "C2")])
+    st = ds.call_states(SEG, bp, es, ct, args).set_index("segment_id")
+    assert st.loc["S1", "n_window"] == 3 and st.loc["S1", "contig_window_prop"] == 0.5
+    assert not st.loc["S1", "contig_window_pass"]
+    assert st.loc["S2", "contig_window_prop"] == 1.0 and st.loc["S2", "contig_window_pass"]
+    # the readout does not change the call
+    assert st.loc["S1", "state"] == "present"
+    # older counts without window_reads: readout empty, calls unchanged
+    old = ds.call_states(SEG, bp.drop(columns="window_reads"), es, ct, args).set_index("segment_id")
+    assert pd.isna(old.loc["S1", "n_window"]) and pd.isna(old.loc["S1", "contig_window_pass"])
+    assert old.loc["S1", "state"] == "present"
