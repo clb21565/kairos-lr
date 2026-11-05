@@ -39,6 +39,8 @@ kairos assess readout (reported, not used in the states above):
   n_window            reads in the original kairos assess windows (window_reads from count_features:
                       >= 100 bp aligned within +-75 bp of a breakpoint), summed over the segment's
                       breakpoints
+  n_window_tied       reads that pass the window rule but are tied (MAPQ < the junction MAPQ, i.e.
+                      equally good elsewhere), summed the same way; metadata
   contig_window_prop  fraction of the contig's breakpoint windows (all of its segments) with >= 1 read
   contig_window_pass  contig_window_prop > --window-min-prop (kairos assess: 0.9)
 
@@ -155,11 +157,13 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
     L, a = bp["mean_read_len"], bp["overhang"]
     bp["lam"] = (bp["flank_depth"].fillna(0) * ((L - 2 * a) / L).clip(lower=0)).fillna(0)
     bp["n"] = bp["span"] + bp["bridge"]
-    if "window_reads" not in bp.columns:          # counts from before the window readout
-        bp["window_reads"] = float("nan")
+    for c in ("window_reads", "window_reads_tied"):   # counts from before the window readout
+        if c not in bp.columns:
+            bp[c] = float("nan")
     per_bp = bp.groupby(keys + ["bp_id"], as_index=False).agg(
         n=("n", "sum"), n_span=("span", "sum"), lam=("lam", "sum"), flank_depth=("flank_depth", "sum"),
-        n_window=("window_reads", lambda x: x.sum(min_count=1)))
+        n_window=("window_reads", lambda x: x.sum(min_count=1)),
+        n_window_tied=("window_reads_tied", lambda x: x.sum(min_count=1)))
     per_es = es.groupby(keys + ["es_id"], as_index=False)["empty"].sum()
 
     # segment -> its breakpoints (long form)
@@ -176,6 +180,7 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
            .agg(n=("n", "sum"), n_span=("n_span", "sum"), lam=("lam", "sum"),
                 flank_depth=("flank_depth", "mean"),
                 n_window=("n_window", lambda x: x.sum(min_count=1)),
+                n_window_tied=("n_window_tied", lambda x: x.sum(min_count=1)),
                 n_breakpoints=("bp_id", "nunique")))
     k, f = args.min_reads, args.absent_fraction
     ends = seg_bp.merge(per_bp, on="bp_id")
@@ -217,9 +222,9 @@ def call_states(seg, bp, es, ct, args, keys=OBS):
     cols = keys + ["segment_id", "state", "n", "n_left", "n_right", "boundaries", "n_breakpoints",
                   "contig_state", "contig_depth", "contig_breadth", "n_span", "lam", "p_miss", "empty",
                   "flank_depth", "carrier_frac_depth", "carrier_frac_empty",
-                  "n_window", "contig_window_prop", "contig_window_pass"]
+                  "n_window", "n_window_tied", "contig_window_prop", "contig_window_pass"]
     return st[cols].astype({"n": int, "n_span": int, "n_breakpoints": int, "boundaries": int,
-                            "n_left": "Int64", "n_right": "Int64", "n_window": "Int64",
+                            "n_left": "Int64", "n_right": "Int64", "n_window": "Int64", "n_window_tied": "Int64",
                             "contig_window_pass": "boolean"})
 
 

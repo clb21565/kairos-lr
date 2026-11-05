@@ -326,6 +326,7 @@ def test_window_readout():
     obs = {"group": "G", "timepoint": "1", "compartment": "X"}
     w = {"B1": 3, "B2": 0, "B3": 4}
     bp = pd.DataFrame([{**obs, "sample": "s1", "bp_id": b, "span": 2, "bridge": 0, "window_reads": n,
+                        "window_reads_tied": 1 if b == "B2" else 0,
                         "flank_depth": 10, "mean_read_len": 150, "overhang": 25} for b, n in w.items()])
     es = pd.DataFrame(columns=list(obs) + ["sample", "es_id", "empty"])
     ct = pd.DataFrame([{**obs, "sample": "s1", "contig": c, "reads": 500, "depth": 10, "breadth": 0.99}
@@ -333,10 +334,11 @@ def test_window_readout():
     st = ds.call_states(SEG, bp, es, ct, args).set_index("segment_id")
     assert st.loc["S1", "n_window"] == 3 and st.loc["S1", "contig_window_prop"] == 0.5
     assert not st.loc["S1", "contig_window_pass"]
+    assert st.loc["S1", "n_window_tied"] == 1 and st.loc["S2", "n_window_tied"] == 0
     assert st.loc["S2", "contig_window_prop"] == 1.0 and st.loc["S2", "contig_window_pass"]
     # the readout does not change the call
     assert st.loc["S1", "state"] == "present"
     # older counts without window_reads: readout empty, calls unchanged
-    old = ds.call_states(SEG, bp.drop(columns="window_reads"), es, ct, args).set_index("segment_id")
+    old = ds.call_states(SEG, bp.drop(columns=["window_reads", "window_reads_tied"]), es, ct, args).set_index("segment_id")
     assert pd.isna(old.loc["S1", "n_window"]) and pd.isna(old.loc["S1", "contig_window_pass"])
     assert old.loc["S1", "state"] == "present"
