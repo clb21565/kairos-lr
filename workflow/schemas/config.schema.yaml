@@ -52,6 +52,7 @@ properties:
   call:
     type: object
     properties:
+      pool:               {type: string, enum: [observation, sample], default: observation}
       min_reads:          {type: integer, minimum: 1}
       alpha:              {type: number, exclusiveMinimum: 0, maximum: 1}
       absent_fraction:    {type: number, exclusiveMinimum: 0, maximum: 1}

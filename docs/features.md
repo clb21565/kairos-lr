@@ -140,7 +140,20 @@ sequence get modest MAPQ even when they are placed correctly.
 
 ## `results/call/`
 
-An **observation** is one (group, timepoint, compartment). Its samples are pooled.
+An **observation** is one (group, timepoint, compartment). `call.pool` sets how its samples
+are used:
+
+- `observation` (default): the samples are pooled. Junction reads, empty-site reads, λ and
+  contig depth are summed over them, and contig breadth combines as 1 − ∏(1 − bᵢ). This
+  gives the lowest detection limit, and short + long reads of one sample give one call.
+- `sample`: every sample is called on its own (one `states.tsv` row per sample × segment)
+  and nothing is summed across libraries. `insitu.py` then gives each observation the
+  strongest state among its samples (present > partial > absent > undetermined) and that
+  sample's values. A cell is present if any one library shows the full region and contig,
+  and absent if no library has *k* junction reads and at least one is deep enough to rule
+  the segment out.
+
+The `samples` column of `states.tsv` lists the samples behind each row.
 
 ### `segments.tsv`
 
@@ -148,7 +161,7 @@ A segment is one contig's copy of a shared region. Its row gives `segment_id`, `
 breakpoints, empty site, `shared_start` / `shared_end`, `region_type`, and `events` (the
 events it belongs to). If one segment takes part in several events, it appears once.
 
-### `states.tsv`: one row per observation × segment
+### `states.tsv`: one row per observation (or sample) × segment
 
 | column | meaning |
 |---|---|
@@ -157,7 +170,7 @@ events it belongs to). If one segment takes part in several events, it appears o
 | `boundaries` | breakpoints with ≥ *k* (`call.min_reads`) junction reads |
 | `n_breakpoints` | breakpoints the segment has (2 = internal) |
 | `contig_state` | `present` if the pooled breadth of the contig's own sequence is ≥ `call.contig_min_breadth` and ≥ `call.contig_breadth_ratio` × (1 − e^−depth); else `not_detected` |
-| `contig_depth`, `contig_breadth` | pooled values. Depths add; breadths combine as 1 − ∏(1 − bᵢ) |
+| `contig_depth`, `contig_breadth` | pooled values with `call.pool: observation`. Depths add; breadths combine as 1 − ∏(1 − bᵢ) |
 | `lam`, `p_miss` | expected spanning reads if all hosts carry the segment, and P(N < *k* \| λ·f) |
 | `empty` | empty-site templates |
 | `carrier_frac_depth` | n_span / λ |
@@ -198,4 +211,8 @@ Other columns:
 
 - `recipient_reads_left` / `_right` and `recipient_contig_breadth` show the evidence behind
   the recipient call.
+- `recipient_samples` lists the samples behind the recipient call (with `call.pool: sample`,
+  the single sample whose state was used). `samples_present` is the number of `states.tsv` rows
+  that call the recipient present at t: always 1 when pooled, and the number of libraries
+  that show it on their own with `call.pool: sample`.
 - `persistence` can be `yes`, `partial`, `no`, `undetermined` or `NA`.

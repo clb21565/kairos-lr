@@ -97,8 +97,12 @@ assess:
 
 
 # ── Call: detection states and in situ events ───────────────────────────────
-# Samples with the same group, timepoint and compartment are pooled into one observation.
+# An observation is one (group, timepoint, compartment).
 call:
+  pool: observation         # observation: sum the reads of an observation's samples (e.g. short + long
+                            #   reads of one sample) before calling, which lowers the detection limit;
+                            # sample: call every sample on its own and combine the per-sample states
+                            #   (strongest state wins: present > partial > absent > undetermined)
   min_reads: 2              # junction reads per boundary to call a segment present (k)
   min_boundaries: 2         # breakpoints a segment needs to be present (2 = internal regions, as in
                             # kairos criterion 2; contig-end regions are at most "partial")

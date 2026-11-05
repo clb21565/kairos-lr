@@ -26,6 +26,15 @@ recipient. Within a group, at timepoint t:
      lineages cannot be compared (unclassified, or identical as far as both go); none keeps all.
      Removed events go to --excluded with the reason.
 
+Per-sample states (detect_state --pool sample) have several rows per segment, timepoint and
+compartment. They are combined before the rules above, without summing any counts: the cell
+takes the strongest state of its samples, present > partial > absent > undetermined, and the
+values of that sample (most junction reads on ties). So the cell is present if any one library
+shows the full region and contig, and absent if no library has k junction reads and at least
+one library is deep enough to rule the segment out. `samples_present` counts the
+libraries that call the recipient present at t. With pooled states there is one row per cell
+and nothing changes.
+
 Timepoints are ordered numerically if they are all numbers, else as dates if they all parse,
 else as text. Observed and prior compartments come from --observed / --prior (default: all).
 """
@@ -56,6 +65,21 @@ def parse_args(argv=None):
     parser.add_argument("--out", required=True, help="insitu_events.tsv")
     parser.add_argument("--excluded", default="", help="events removed by the lineage filter, with reason")
     return parser.parse_args(argv)
+
+
+RANK = {"present": 0, "partial": 1, "absent": 2, "undetermined": 3}
+
+
+def combine_samples(st):
+    """One row per (group, timepoint, compartment, segment): the strongest per-sample state."""
+    if "samples" not in st.columns:
+        st = st.assign(samples="")
+    key = ["group", "timepoint", "compartment", "segment_id"]
+    st = st.assign(_rank=st["state"].map(RANK).fillna(3), _n=-st["n"].fillna(0))
+    n_present = (st["state"] == "present").groupby([st[k] for k in key]).sum().rename("samples_present")
+    best = st.sort_values(key + ["_rank", "_n"], kind="stable").drop_duplicates(key)
+    best = best.merge(n_present.reset_index(), on=key)
+    return best.drop(columns=["_rank", "_n"])
 
 
 def time_order(values):
@@ -199,6 +223,7 @@ def call_group(g, st, ev, observed, prior, seg_contig):
             rows[key] = {
                 "group": g, "t": t, "event_id": e.event_id, "direction": direction, "tier": tier,
                 "recipient_contig": seg_contig[rec], "recipient_segment": rec, "recipient_compartment": f,
+                "recipient_samples": r["samples"], "samples_present": int(r["samples_present"]),
                 "recipient_reads": int(r["n"]),
                 "recipient_reads_left": r.get("n_left"), "recipient_reads_right": r.get("n_right"),
                 "recipient_contig_breadth": r.get("contig_breadth"),
@@ -217,6 +242,7 @@ def main(argv=None):
     st = pd.read_csv(args.states, sep="\t", dtype={"group": str, "timepoint": str, "compartment": str},
                      keep_default_na=False, na_values=[""])
     st[["group", "compartment"]] = st[["group", "compartment"]].fillna("")
+    st = combine_samples(st)
     seg = pd.read_csv(args.segments, sep="\t", keep_default_na=False)
     seg_contig = dict(zip(seg["segment_id"], seg["contig"]))
     ev = pd.read_csv(args.event_segments, sep="\t")
@@ -240,7 +266,8 @@ def main(argv=None):
             rows.append(r)
 
     cols = ["group", "timepoint", "event_id", "direction", "tier",
-            "recipient_contig", "recipient_segment", "recipient_compartment", "recipient_reads",
+            "recipient_contig", "recipient_segment", "recipient_compartment",
+            "recipient_samples", "samples_present", "recipient_reads",
             "recipient_reads_left", "recipient_reads_right", "recipient_contig_breadth",
             "recipient_carrier_frac_depth", "recipient_carrier_frac_empty",
             "prev_timepoint", "prev_state", "prev_empty_reads",

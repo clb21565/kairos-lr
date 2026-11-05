@@ -4,7 +4,10 @@ kairos detect-state | present / absent / undetermined for every shared segment i
 
 A segment is one contig's copy of a shared region (one side of an event in events.tsv), with up
 to two breakpoints. An observation is one (group, timepoint, compartment) in the sample sheet; the
-samples in it (e.g. short and long reads of the same sample) are pooled.
+samples in it (e.g. short and long reads of the same sample) are pooled (--pool observation,
+the default). With --pool sample every sample is called on its own: one row per sample x segment,
+nothing summed across libraries; insitu.py then combines the per-sample states of an observation
+(see there).
 
 For each observation and segment:
   n         junction reads: spanning reads + bridging pairs at the segment's breakpoints
@@ -69,6 +72,9 @@ def parse_args(argv=None):
                         help="breadth of the contig's own sequence needed to call the contig present")
     parser.add_argument("--contig-breadth-ratio", type=float, default=0.5,
                         help="observed / expected breadth needed to call the contig present")
+    parser.add_argument("--pool", choices=["observation", "sample"], default="observation",
+                        help="observation: sum each observation's samples before calling; "
+                             "sample: call every sample on its own")
     parser.add_argument("--out-segments", required=True, help="segments.tsv (segment definitions)")
     parser.add_argument("--out-states", required=True, help="states.tsv (one row per observation x segment)")
     parser.add_argument("--out-event-segments", required=True,
@@ -118,10 +124,10 @@ def load_counts(samples, counts_dir):
     return [pd.concat(x, ignore_index=True).merge(meta, on="sample") for x in (bp, es, ct)]
 
 
-def contig_states(ct, args):
-    """Pool each observation's samples per contig; breadths combine as independent coverage."""
+def contig_states(ct, args, keys=OBS):
+    """Pool the samples in each `keys` unit per contig; breadths combine as independent coverage."""
     ct = ct.assign(miss=1 - ct["breadth"].fillna(0))
-    c = ct.groupby(OBS + ["contig"], as_index=False).agg(
+    c = ct.groupby(keys + ["contig"], as_index=False).agg(
         contig_reads=("reads", "sum"), contig_depth=("depth", "sum"), miss=("miss", "prod"))
     c["contig_breadth"] = 1 - c["miss"]
     expected = 1 - np.exp(-c["contig_depth"])
@@ -133,14 +139,15 @@ def contig_states(ct, args):
     return c.drop(columns="miss")
 
 
-def call_states(seg, bp, es, ct, args):
+def call_states(seg, bp, es, ct, args, keys=OBS):
+    """States per `keys` unit x segment: OBS pools an observation's samples, OBS + [sample] does not."""
     # expected spanning reads per sample and breakpoint
     L, a = bp["mean_read_len"], bp["overhang"]
     bp["lam"] = (bp["flank_depth"].fillna(0) * ((L - 2 * a) / L).clip(lower=0)).fillna(0)
     bp["n"] = bp["span"] + bp["bridge"]
-    per_bp = bp.groupby(OBS + ["bp_id"], as_index=False).agg(
+    per_bp = bp.groupby(keys + ["bp_id"], as_index=False).agg(
         n=("n", "sum"), n_span=("span", "sum"), lam=("lam", "sum"), flank_depth=("flank_depth", "sum"))
-    per_es = es.groupby(OBS + ["es_id"], as_index=False)["empty"].sum()
+    per_es = es.groupby(keys + ["es_id"], as_index=False)["empty"].sum()
 
     # segment -> its breakpoints (long form)
     seg_bp = pd.concat([
@@ -149,23 +156,23 @@ def call_states(seg, bp, es, ct, args):
     ])
     seg_bp = seg_bp[seg_bp["bp_id"] != ""]
 
-    obs = bp[OBS].drop_duplicates()
+    obs = bp[keys].drop_duplicates()
     grid = obs.merge(seg[["segment_id", "contig", "empty_site"]], how="cross")
     agg = (seg_bp.merge(per_bp, on="bp_id")
-           .groupby(OBS + ["segment_id"], as_index=False)
+           .groupby(keys + ["segment_id"], as_index=False)
            .agg(n=("n", "sum"), n_span=("n_span", "sum"), lam=("lam", "sum"),
                 flank_depth=("flank_depth", "mean"),
                 n_breakpoints=("bp_id", "nunique")))
     k, f = args.min_reads, args.absent_fraction
     ends = seg_bp.merge(per_bp, on="bp_id")
-    ends = (ends.pivot_table(index=OBS + ["segment_id"], columns="end", values="n", aggfunc="sum")
+    ends = (ends.pivot_table(index=keys + ["segment_id"], columns="end", values="n", aggfunc="sum")
             .reindex(columns=["left", "right"]).add_prefix("n_").reset_index())
     ends.columns.name = None
-    st = grid.merge(agg, on=OBS + ["segment_id"], how="left")
-    st = st.merge(ends, on=OBS + ["segment_id"], how="left")
-    st = st.merge(contig_states(ct, args), on=OBS + ["contig"], how="left")
+    st = grid.merge(agg, on=keys + ["segment_id"], how="left")
+    st = st.merge(ends, on=keys + ["segment_id"], how="left")
+    st = st.merge(contig_states(ct, args, keys), on=keys + ["contig"], how="left")
     st["contig_state"] = st["contig_state"].fillna("not_detected")
-    st = st.merge(per_es.rename(columns={"es_id": "empty_site"}), on=OBS + ["empty_site"], how="left")
+    st = st.merge(per_es.rename(columns={"es_id": "empty_site"}), on=keys + ["empty_site"], how="left")
     st[["n", "n_span", "lam", "n_breakpoints"]] = st[["n", "n_span", "lam", "n_breakpoints"]].fillna(0)
     st["empty"] = st["empty"].where(st["empty_site"] != "", float("nan"))
 
@@ -183,7 +190,7 @@ def call_states(seg, bp, es, ct, args):
     st["carrier_frac_empty"] = (st["n"] / tot).where(tot > 0).round(3)
     st["lam"] = st["lam"].round(2)
     st["flank_depth"] = st["flank_depth"].round(2)
-    cols = OBS + ["segment_id", "state", "n", "n_left", "n_right", "boundaries", "n_breakpoints",
+    cols = keys + ["segment_id", "state", "n", "n_left", "n_right", "boundaries", "n_breakpoints",
                   "contig_state", "contig_depth", "contig_breadth", "n_span", "lam", "p_miss", "empty",
                   "flank_depth", "carrier_frac_depth", "carrier_frac_empty"]
     return st[cols].astype({"n": int, "n_span": int, "n_breakpoints": int, "boundaries": int,
@@ -201,7 +208,13 @@ def main(argv=None):
                                 "bp_left_2": str, "bp_right_2": str, "empty_site_2": str})
     seg, sides = segments_from_events(events)
     bp, es, ct = load_counts(samples, args.counts_dir)
-    states = call_states(seg, bp, es, ct, args)
+    if args.pool == "sample":
+        states = call_states(seg, bp, es, ct, args, OBS + ["sample"]).rename(columns={"sample": "samples"})
+    else:
+        states = call_states(seg, bp, es, ct, args)
+        members = samples.groupby(OBS)["sample"].apply(lambda x: ",".join(x)).rename("samples").reset_index()
+        states = states.merge(members, on=OBS, how="left")
+    states.insert(len(OBS), "samples", states.pop("samples"))
 
     seg_out = seg.merge(
         sides.groupby("segment_id")["event_id"].apply(lambda x: ";".join(sorted(set(x)))).rename("events"),
@@ -211,7 +224,8 @@ def main(argv=None):
     (sides.pivot(index="event_id", columns="side", values="segment_id")
      .rename(columns={1: "segment_1", 2: "segment_2"}).reset_index()
      .to_csv(args.out_event_segments, sep="\t", index=False))
-    print(f"{len(seg)} segments x {len(states[OBS].drop_duplicates())} observations: "
+    print(f"{len(seg)} segments x {len(states[OBS + ['samples']].drop_duplicates())} "
+          f"{'samples' if args.pool == 'sample' else 'observations'}: "
           + ", ".join(f"{k} {v}" for k, v in states["state"].value_counts().items()), file=sys.stderr)
 
 

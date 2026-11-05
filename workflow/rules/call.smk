@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # call.smk
-# Pool each observation's samples, call every shared segment present / absent /
-# undetermined (detect_state.py), then call in situ HGT events over time (insitu.py).
+# Call every shared segment present / partial / absent / undetermined per observation
+# (call.pool: observation, samples pooled) or per sample (call.pool: sample) (detect_state.py), then call in situ HGT events over time (insitu.py).
 #
 # Expects the following to already be defined by the top-level Snakefile:
 #   DET, SAMPLES, CALL, detect_state, insitu
@@ -20,6 +20,8 @@ rule detect_state:
         segments=f"{CALLDIR}/segments.tsv",
         states=f"{CALLDIR}/states.tsv",
         event_segments=f"{CALLDIR}/event_segments.tsv"
+    params:
+        pool=CALL.get("pool", "observation")
     conda:
         "../envs/python.yaml"
     shell:
@@ -33,6 +35,7 @@ rule detect_state:
         " --min-boundaries {CALL[min_boundaries]}"
         " --contig-min-breadth {CALL[contig_min_breadth]}"
         " --contig-breadth-ratio {CALL[contig_breadth_ratio]}"
+        " --pool {params.pool}"
         " --out-segments {output.segments}"
         " --out-states {output.states}"
         " --out-event-segments {output.event_segments}"

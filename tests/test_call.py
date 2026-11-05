@@ -273,3 +273,46 @@ def test_contig_breadth_pools_samples():
     c = ds.contig_states(ct, args).iloc[0]
     # 1 - 0.67^2 = 0.551 >= 0.5, expected 1 - exp(-0.8) = 0.55
     assert c.contig_breadth == pytest.approx(0.551, abs=1e-3) and c.contig_state == "present"
+
+
+# ── call.pool: sample ────────────────────────────────────────────────────────
+
+def test_pool_sample_keeps_samples_apart():
+    # two libraries of one observation, each with one junction read per boundary:
+    # pooled they reach k = 2 at both boundaries; per sample, neither boundary does
+    args = type("A", (), dict(min_reads=2, alpha=0.05, absent_fraction=1.0, min_boundaries=2,
+                              contig_min_breadth=0.5, contig_breadth_ratio=0.5))
+    obs = {"group": "G", "timepoint": "1", "compartment": "X"}
+    bp = pd.DataFrame([{**obs, "sample": s, "bp_id": b, "span": 1, "bridge": 0, "flank_depth": 1,
+                        "mean_read_len": 150, "overhang": 25} for s in ("a", "b") for b in ("B1", "B2")])
+    es = pd.DataFrame(columns=list(obs) + ["sample", "es_id", "empty"])
+    ct = pd.DataFrame([{**obs, "sample": s, "contig": "C1", "reads": 500, "depth": 10, "breadth": 0.99}
+                       for s in ("a", "b")])
+    seg = SEG.iloc[[0]]
+    pooled = ds.call_states(seg, bp, es, ct, args)
+    assert len(pooled) == 1 and pooled.iloc[0].state == "present"
+    per = ds.call_states(seg, bp, es, ct, args, ds.OBS + ["sample"])
+    assert len(per) == 2 and set(per["state"]) == {"partial"}   # 1 read per boundary < k
+
+
+def test_combine_samples_strongest_state():
+    st = pd.DataFrame([
+        {"group": "G", "timepoint": "1", "compartment": "X", "segment_id": "S", "samples": s,
+         "state": state, "n": n}
+        for s, state, n in [("a", "absent", 0), ("b", "undetermined", 1), ("c", "partial", 3),
+                            ("d", "present", 4), ("e", "present", 9)]])
+    one = lambda rows: ins.combine_samples(st[st["samples"].isin(list(rows))]).iloc[0]
+    assert one("ab").state == "absent"                     # a deep library rules it out
+    assert one("abc").state == "partial"
+    best = one("abcde")
+    assert (best.state, best.samples, best.samples_present) == ("present", "e", 2)
+
+
+def test_insitu_with_per_sample_states(tmp_path):
+    rows = states(DIRECTED)
+    # add a second, shallow library to every observation: it never changes the call
+    extra = rows.assign(state="undetermined", n=0, samples="lib2")
+    st = pd.concat([rows.assign(samples="lib1"), extra], ignore_index=True)
+    out = run_insitu(tmp_path, st)
+    assert len(out) == 1 and out.iloc[0].recipient_samples == "lib1"
+    assert out.iloc[0].samples_present == "1"

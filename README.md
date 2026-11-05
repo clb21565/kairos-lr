@@ -23,7 +23,7 @@ The workflow has three stages; each can be run on its own (`snakemake detect | a
    - **Flank depth:** the read depth next to each breakpoint; it sets the detection limit.
    - **Empty-site evidence:** split or deletion reads, long-insert read pairs, and short reads realigned in a second pass.
 3. **Call** (all samples):
-   - **States:** samples sharing a group, timepoint and compartment are pooled into one observation. Each segment in each observation is called present, partial, absent or undetermined. Present means that both region boundaries have junction reads and the host contig's own sequence is detected. Absent uses a Poisson detection limit.
+   - **States:** samples sharing a group, timepoint and compartment form one observation. By default their reads are pooled (`call.pool: observation`); with `call.pool: sample`, each sample is called on its own and the per-sample states are combined. Each segment in each observation is called present, partial, absent or undetermined. Present means that both region boundaries have junction reads and the host contig's own sequence is detected. Absent uses a Poisson detection limit.
    - **In situ events:** a recipient whose segment appears at time *t* after being absent, with a donor that carried it earlier. Each event gets an evidence tier, a direction and a persistence flag.
 
 The design (feature definitions, detection limit, in situ rules) is described in `docs/features.md` (every feature file and column) and in the docstrings of each script in `scripts/`.
@@ -78,7 +78,7 @@ Each rule's tools come from its own conda env in `workflow/envs/`, created on fi
    | `compartment` | in situ | `INF`, `EFF` | free text; config says which compartments are observed / prior |
    | `assembly` | optional | `CB_0804_INF` | provenance only |
 
-   A sample sequenced with both short and long reads gets two rows (different `sample` IDs, same group, timepoint and compartment). The rows are pooled in the call stage.
+   A sample sequenced with both short and long reads gets two rows (different `sample` IDs, same group, timepoint and compartment). The rows are pooled in the call stage unless `call.pool: sample`.
 
 ## Configuration
 
