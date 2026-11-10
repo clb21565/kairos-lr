@@ -80,8 +80,9 @@ the simulated reads (and cost) by the same factor; the window ends become contig
 ## Scoring
 
 Each planted event is judged by its recipient: `called_A` / `called_B` (directed, right
-recipient, right timepoint), `wrong_time`, `wrong_direction`, `unresolved`, `excluded` or
-`none`, plus whether the donor was the planted one (`planted`), another carrier of the same
+recipient, right timepoint), `late_A` / `late_B` (first called after the transfer, e.g. when
+the evidence at the transfer timepoint was only partial; counts as recalled), `early`,
+`wrong_direction`, `unresolved`, `excluded` or `none`, plus whether the donor was the planted one (`planted`), another carrier of the same
 element (`same_element`) or something else. `correct` compares the outcome with `expect`
 (`not_A` accepts anything but a tier A call). Reported events whose recipient was never
 planted are false positives.

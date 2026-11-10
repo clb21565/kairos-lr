@@ -204,16 +204,20 @@ def test_partial_donor_is_not_a_donor(tmp_path):
         (1, "X", "SD", "partial"), (1, "X", "SR", "absent"),
         (2, "X", "SD", "present"), (2, "X", "SR", "present"),
     ]))
-    # donor only partially seen at t1: no earlier donor, and it was seen before t2 -> not unresolved either
-    assert len(out) == 0
+    # donor only partially seen at t1: not an earlier donor, so the direction is unresolved
+    assert len(out) == 1 and out.iloc[0]["direction"] == "unresolved"
 
 
-def test_partial_recipient_earlier_is_not_new(tmp_path):
+def test_partial_recipient_earlier_is_still_new(tmp_path):
     out = run_insitu(tmp_path, states([
         (1, "X", "SD", "present"), (1, "X", "SR", "partial"),
         (2, "X", "SD", "present"), (2, "X", "SR", "present"),
     ]))
-    assert len(out) == 0
+    # partial evidence is not "seen before": new at t2, but tier B (some junction reads at t1)
+    assert len(out) == 1
+    e = out.iloc[0]
+    assert (e["recipient_segment"], str(e["timepoint"]), e["direction"]) == ("SR", "2", "directed")
+    assert e["tier"] == "B" and e["prev_state"] == "partial"
 
 
 def test_partial_recipient_is_not_called(tmp_path):
@@ -222,8 +226,10 @@ def test_partial_recipient_is_not_called(tmp_path):
         (2, "X", "SD", "present"), (2, "X", "SR", "partial"),
         (3, "X", "SD", "present"), (3, "X", "SR", "present"),
     ]))
-    # first full presence at t3, but it was partially seen at t2 -> not new at t3
-    assert len(out) == 0
+    # never called at t2 (only partial); called at its first full presence, t3, as tier B
+    assert len(out) == 1
+    e = out.iloc[0]
+    assert str(e["timepoint"]) == "3" and e["tier"] == "B" and e["prev_state"] == "partial"
 
 
 # ── detect_state: region boundaries and contig presence ──────────────────────

@@ -42,11 +42,11 @@ Within a group, at timepoint *t* (`scripts/insitu.py`):
 - **Present** means the full region is seen: every boundary (breakpoint) of the segment has junction reads, and the contig's own sequence (the contig minus its regions) is covered. Contig-end regions with one boundary, or junction reads without the host contig, are `partial`.
 - **Recipient new:**
   - its segment is present in an observed compartment at *t*;
-  - it was not seen (present or partial) in any prior compartment at an earlier timepoint;
-  - it is not seen in another compartment at *t*, which rules out same-day import (e.g. influent → effluent).
+  - it was not present in any prior compartment at an earlier timepoint (partial evidence does not count as seen before);
+  - it is not present in another compartment at *t*, which rules out same-day import (e.g. influent → effluent).
 - **Donor first:** the other contig's segment was present at an earlier timepoint; this is what gives the direction. If both appear at *t*, the event is reported with direction `unresolved`.
 - **Lineage:** HGT is between lineages. Events whose recipient and donor contigs have the same lineage are never reported. By default (`call.lineage_filter: discordant`), the lineages must also be known to differ at some rank. Removed events go to `insitu_excluded.tsv`.
-- **Tier:** `A` if the recipient's segment was confidently absent at the previous timepoint; `B` if that was undetermined (immigration or below detection).
+- **Tier:** `A` if the recipient's segment was confidently absent at the previous timepoint; `B` if it was partial there (some junction reads), or undetermined (immigration or below detection).
 - **Persistence:** whether the segment is still present at the next timepoint.
 
 ## Installation

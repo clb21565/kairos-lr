@@ -158,3 +158,6 @@ def test_score_outcomes():
     assert r.loc["e3", "donor_match"] == "same_element"              # d1 carries the same IS
     assert r.loc["e4", "observed"] == "excluded" and r.loc["e4", "correct"]
     assert len(fp) == 1 and fp.iloc[0]["recipient_contig"] == "x"
+    late = ev.assign(timepoint=["4", "3", "3", "4"])                 # e1 first called one step late
+    r2 = sp.score(truth, late, ex)[0].set_index("event_id")
+    assert r2.loc["e1", "observed"] == "late_A" and r2.loc["e1", "correct"]

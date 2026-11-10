@@ -371,9 +371,9 @@ def simulate(comp, variants, sample, read_type, simulator, out_dir, background, 
 
 # ── score (oracle catalogue: contigs are named after the planted sequences) ─────────────
 
-OK = {"called": {"called_A", "called_B"},
+OK = {"called": {"called_A", "called_B", "late_A", "late_B"},
       "none": {"none", "excluded"},
-      "not_A": {"none", "excluded", "called_B", "unresolved", "wrong_time", "wrong_direction"},
+      "not_A": {"none", "excluded", "called_B", "late_B", "unresolved", "early", "wrong_direction"},
       "unresolved": {"unresolved"},
       "excluded": {"excluded", "none"}}
 
@@ -398,8 +398,12 @@ def observe(t, events, excluded, element_of):
             best = on_time.assign(_p=[donor_kind(d) != "planted" for d in on_time["donor_contig"]]
                                   ).sort_values(["_p", "tier"]).iloc[0]
             return f"called_{best['tier']}", donor_kind(best["donor_contig"])
+        late = right[pd.to_numeric(right["timepoint"], errors="coerce") >
+                     pd.to_numeric(pd.Series([t["transfer_t"]]), errors="coerce").iloc[0]]
+        if not late.empty:     # first full evidence after the transfer (e.g. partial at k)
+            return f"late_{late.iloc[0]['tier']}", donor_kind(late.iloc[0]["donor_contig"])
         if not right.empty:
-            return "wrong_time", donor_kind(right.iloc[0]["donor_contig"])
+            return "early", donor_kind(right.iloc[0]["donor_contig"])
         if not mine.empty:
             return "unresolved", donor_kind(mine.iloc[0]["donor_contig"])
         back = events[(events["recipient_contig"] == don) & (events["donor_contig"].isin(recs))]

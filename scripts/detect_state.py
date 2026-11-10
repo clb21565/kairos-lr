@@ -30,8 +30,8 @@ A segment counts as present only when both the region and its host contig are se
                  junction reads, and contig_state is present
   partial        n >= k junction reads in total, but not present: only one boundary seen, the
                  segment has fewer than --min-boundaries breakpoints (contig-end region), or the
-                 contig itself is not detected. In situ treats partial as "seen" when asking
-                 whether a contig was there before, but never as a present recipient or donor.
+                 contig itself is not detected. In situ never counts partial as seen before,
+                 nor as a recipient or donor; a partial previous state only lowers the tier to B.
   absent         n < k and P(N < k | lambda * f) <= alpha   (Poisson; f = --absent-fraction)
   undetermined   otherwise (too shallow to tell), or the segment has no breakpoint
 

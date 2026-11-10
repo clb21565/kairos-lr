@@ -4,20 +4,24 @@ kairos in situ | HGT events that happened within the sampled system, ordered in 
 
 Port of get_isHGTs_weekly() (CIWARS influent/effluent study) to segment states from
 detect_state.py. "Present" is detect_state's strict call: every boundary of the region has
-junction reads and the host contig's own sequence is detected. "Seen" is present or partial
-(some junction reads, but not the full region + contig evidence). For each event (two contigs sharing a segment), each contig is tried as the
-recipient. Within a group, at timepoint t:
+junction reads and the host contig's own sequence is detected. Only present counts: partial
+evidence (some junction reads, but not the full region + contig) neither makes a contig "seen
+before" nor a recipient or donor; it only lowers the tier. (Counting partial as seen lost real
+events near the detection limit: one boundary short of k reads at the transfer timepoint
+blocked the call at every later timepoint.) For each event (two contigs sharing a segment),
+each contig is tried as the recipient. Within a group, at timepoint t:
 
-  1. Recipient new: its segment is present in an observed compartment f at t, was not seen in any
-     prior compartment at an earlier timepoint, and is not seen at t in any other prior compartment
-     (<=: rules out same-day import, e.g. influent -> effluent). t must have an earlier
-     observation (nothing is "new" at the first timepoint).
+  1. Recipient new: its segment is present in an observed compartment f at t, was not present in
+     any prior compartment at an earlier timepoint, and is not present at t in any other prior
+     compartment (<=: rules out same-day import, e.g. influent -> effluent). t must have an
+     earlier observation (nothing is "new" at the first timepoint).
   2. Donor first: the other contig's segment was present in a prior compartment at an earlier
-     timepoint (<: this is what gives the direction). If instead it is first seen at t,
+     timepoint (<: this is what gives the direction). If instead it is first present at t,
      the event is kept with direction "unresolved".
   3. Tier: A if, at the previous timepoint, the recipient's segment was confidently absent
-     (detect_state "absent") in a prior compartment; B if it was only undetermined (could be
-     immigration or below detection) or not observed there.
+     (detect_state "absent") in a prior compartment and partial in none; B if it was partial
+     (some junction reads: an earlier carrier below the full evidence), only undetermined
+     (could be immigration or below detection) or not observed there.
   4. Persistence: whether the segment is still present in an observed compartment at the next
      timepoint (yes / partial / no / undetermined / NA).
   5. Lineage (--contig-taxonomy): HGT is between lineages, so events whose two contigs have the
@@ -140,15 +144,14 @@ class Group:
         self.state = idx["state"].to_dict()
         self.row = idx
         self.present = self._index(st[st["state"] == "present"])
-        self.seen = self._index(st[st["state"].isin(["present", "partial"])])
 
     @staticmethod
     def _index(d):
         return {seg: list(zip(x["t"], x["compartment"])) for seg, x in d.groupby("segment_id")}
 
-    def present_at(self, seg, t=None, before=None, compartments=None, seen=False):
-        """(t, compartment) where seg is present (seen=True: present or partial), filtered."""
-        hits = (self.seen if seen else self.present).get(seg, [])
+    def present_at(self, seg, t=None, before=None, compartments=None):
+        """(t, compartment) where seg is present, filtered."""
+        hits = self.present.get(seg, [])
         return [(tt, f) for tt, f in hits
                 if (t is None or tt == t) and (before is None or tt < before)
                 and (compartments is None or f in compartments)]
@@ -161,11 +164,11 @@ class Group:
         t = min(tt for tt, _ in hits)
         if not self.prior_times or t <= self.prior_times[0]:
             return None      # no earlier observation to compare with
-        if self.present_at(seg, before=t, compartments=self.prior, seen=True):
+        if self.present_at(seg, before=t, compartments=self.prior):
             return None
         for f in sorted(self.observed):
             if (t, f) in hits:
-                others = [ff for _, ff in self.present_at(seg, t=t, compartments=self.prior, seen=True)
+                others = [ff for _, ff in self.present_at(seg, t=t, compartments=self.prior)
                           if ff != f]
                 if not others:
                     return t, f
@@ -189,7 +192,7 @@ def call_group(g, st, ev, observed, prior, seg_contig):
                 direction = "directed"
                 t_d = max(tt for tt, _ in donor_before)
                 donor_last = (t_d, ",".join(sorted({ff for tt, ff in donor_before if tt == t_d})))
-            elif grp.present_at(don, t=t) and not grp.present_at(don, before=t, seen=True):
+            elif grp.present_at(don, t=t) and not grp.present_at(don, before=t):
                 direction = "unresolved"
                 donor_last = (None, "")
             else:
@@ -202,7 +205,7 @@ def call_group(g, st, ev, observed, prior, seg_contig):
 
             tp = max(tt for tt in grp.prior_times if tt < t)
             prev = grp.states_at(rec, tp, prior)
-            prev_state = ("absent" if "absent" in prev else
+            prev_state = ("partial" if "partial" in prev else "absent" if "absent" in prev else
                           "undetermined" if prev else "not_observed")
             # NA when the segment has no empty site (nothing to count), not 0
             prev_vals = [grp.row.loc[(rec, tp, ff), "empty"] for ff in prior
