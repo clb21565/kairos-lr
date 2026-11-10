@@ -1,0 +1,7 @@
+sample	assembly	reads	read_type	timepoint	group	compartment
+SRR26192777_ML	SRR26192777	benchmarks/sbr/reads/SRR26192777_1.fastq.gz,benchmarks/sbr/reads/SRR26192777_2.fastq.gz	short_pe	2020-03-20	SBR	ML
+SRR26192772_INF	SRR26192772	benchmarks/sbr/reads/SRR26192772_1.fastq.gz,benchmarks/sbr/reads/SRR26192772_2.fastq.gz	short_pe	2020-03-31	SBR	INF
+SRR26192773_INF	SRR26192773	benchmarks/sbr/reads/SRR26192773_1.fastq.gz,benchmarks/sbr/reads/SRR26192773_2.fastq.gz	short_pe	2020-03-31	SBR	INF
+SRR26192775_INF	SRR26192775	benchmarks/sbr/reads/SRR26192775_1.fastq.gz,benchmarks/sbr/reads/SRR26192775_2.fastq.gz	short_pe	2020-03-31	SBR	INF
+SRR26192774_INF	SRR26192774	benchmarks/sbr/reads/SRR26192774_1.fastq.gz,benchmarks/sbr/reads/SRR26192774_2.fastq.gz	short_pe	2020-04-03	SBR	INF
+SRR26192776_ML	SRR26192776	benchmarks/sbr/reads/SRR26192776_1.fastq.gz,benchmarks/sbr/reads/SRR26192776_2.fastq.gz	short_pe	2020-04-10	SBR	ML

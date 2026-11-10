@@ -14,3 +14,8 @@ results/
 .tests/sim*/
 __pycache__/
 .tests/bench/
+benchmarks/sbr/reads/
+benchmarks/sbr/trimmed/
+benchmarks/sbr/assemblies/
+benchmarks/sbr/catalogue/
+benchmarks/sbr/*.out

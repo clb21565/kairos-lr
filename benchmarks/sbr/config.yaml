@@ -1,0 +1,18 @@
+# SBR benchmark (Brown et al. 2024, Nat Commun; BioProject PRJNA1020581).
+# Overrides config/config.yaml: snakemake --configfile config/config.yaml benchmarks/sbr/config.yaml
+# Six deeply sequenced samples. Timepoints/compartments follow the SRA BioSample
+# metadata (collection_date, distinguishing_features), NOT the sample aliases, which
+# were mixed up at sequencing:
+#   SRR26192777  2020-03-20  ML   Reactor 0.1 O1 (DEEP)   before hospital sewage
+#   SRR26192772  2020-03-31  INF  "Reactor 0 10%_FEED", hospital sewage (check)
+#   SRR26192773  2020-03-31  INF  0% feed, municipal sewage
+#   SRR26192775  2020-03-31  INF  10% feed, hospital sewage
+#   SRR26192774  2020-04-03  INF  10% feed, hospital sewage
+#   SRR26192776  2020-04-10  ML   Reactor 0.1 O1 (DEEP)   after
+# Event: contig new in ML 04-10 (absent in ML 03-20), donor seen in an earlier sample.
+catalogue: benchmarks/sbr/catalogue/catalogue.fa
+catalogue_name: sbr
+samples: benchmarks/sbr/samples.tsv
+call:
+  observed_compartments: [ML]   # recipients only in mixed liquor
+  prior_compartments: []        # seen-before: any compartment (influent and earlier ML)

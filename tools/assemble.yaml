@@ -1,0 +1,6 @@
+# conda env create -f tools/assemble.yaml   (env: kairos-assemble)
+name: kairos-assemble
+channels: [conda-forge, bioconda]
+dependencies:
+  - spades>=4.0
+  - fastp>=0.23
