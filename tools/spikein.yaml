@@ -1,0 +1,9 @@
+# conda env create -f tools/spikein.yaml   (env: kairos-spikein)
+name: kairos-spikein
+channels: [conda-forge, bioconda]
+dependencies:
+  - python>=3.10
+  - pandas
+  - insilicoseq>=2.0     # short reads with a NovaSeq error model (--coverage_file)
+  - badread              # Nanopore reads
+  - wgsim                # simple short reads (local tests)

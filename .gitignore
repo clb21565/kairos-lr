@@ -19,3 +19,4 @@ benchmarks/sbr/trimmed/
 benchmarks/sbr/assemblies/
 benchmarks/sbr/catalogue/
 benchmarks/sbr/*.out
+.tests/spikein/
